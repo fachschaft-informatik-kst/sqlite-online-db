@@ -23,10 +23,6 @@ ui.github.token.addEventListener("change", (event) => {
     setSensitiveItem("github.token", event.target.value);
 });
 
-ui.openai.apikey.addEventListener("change", () => {
-    ui.openai.apikey.value = "";
-});
-
 ui.github.username.value = localStorage.getItem("github.username") || "";
 ui.github.token.value = getSensitiveItem("github.token");
 ui.openai.apikey.value = "";
