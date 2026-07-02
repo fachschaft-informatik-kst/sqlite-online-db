@@ -1,44 +1,31 @@
-# SQLite Online DB
+# SQLite Online DB (SQLime Fork für GitHub Pages)
 
-A lightweight, browser-based SQLite query tool that can be hosted on **GitHub Pages**. Upload any `.db` file and let students explore the database with SQL queries — no server, no installation, no data ever leaves the browser.
+Dieses Repository wurde auf Basis von [nalgeon/sqlime](https://github.com/nalgeon/sqlime) umgestellt, damit die Anwendung direkt über **GitHub Pages** für Studierende verfügbar ist.
 
-## ✨ Features
+## Ziel
 
-- **Drag & drop** or click-to-upload `.db` / `.sqlite` / `.sqlite3` files
-- **Schema sidebar** — browse tables and columns; click a table to auto-generate a `SELECT` query
-- **SQL editor** with keyboard shortcut (`Ctrl`+`Enter` / `Cmd`+`Enter` to run)
-- **Results table** with row count and execution time
-- **100 % client-side** — powered by [sql.js](https://sql.js.org/) (SQLite compiled to WebAssembly); data never leaves the student's browser
-- Zero dependencies to install — everything is loaded from a CDN
+- SQL-Playground im Browser ohne Serverbetrieb
+- Direkte Bereitstellung unter GitHub Pages
+- Basis ist ein Fork von SQLime
 
-## 🚀 Deployment (GitHub Pages)
+## GitHub Pages aktivieren
 
-1. Fork or clone this repository.
-2. Go to **Settings → Pages** in your GitHub repository.
-3. Under **Source**, select the branch (e.g. `main`) and root folder `/`.
-4. Click **Save**. Your site will be published at `https://<org>.github.io/<repo>/`.
+1. Repository öffnen → **Settings** → **Pages**
+2. Unter **Source**: Branch `main` und Ordner `/ (root)` wählen
+3. Speichern
+4. Die Anwendung ist danach unter `https://<org>.github.io/<repo>/` erreichbar
 
-## 🛠️ Local development
+## Hinweise zur Fork-Basis
 
-Just open `index.html` in a web browser — no build step required.
+- Codebasis stammt aus SQLime und wurde für Projekt-Pfade auf GitHub Pages angepasst (relative Asset-Pfade statt Root-Pfade).
+- Wenn ihr mit einem eigenen SQLime-Fork synchronisieren wollt, übernehmt regelmäßig die Änderungen aus dem Upstream-Projekt.
 
-> **Tip:** Some browsers restrict `file://` access to WASM. Use a local server for best results:
-> ```bash
-> # Python 3
-> python -m http.server 8080
-> # then open http://localhost:8080
-> ```
+## Lokal testen
 
-## 📁 File structure
+Einfach im Repo-Verzeichnis einen lokalen Server starten:
 
-```
-index.html   # Main application page
-style.css    # Styles
-app.js       # Application logic (file upload, SQL execution, schema display)
-README.md    # This file
+```bash
+python -m http.server 8080
 ```
 
-## 🙏 Credits
-
-- [sql.js](https://github.com/sql-js/sql.js) — SQLite compiled to WebAssembly
-- Inspired by [sqlime](https://github.com/nalgeon/sqlime)
+Dann im Browser öffnen: `http://localhost:8080`.
