@@ -78,7 +78,7 @@ function handleIndent(elem, event) {
     return true;
 }
 
-// handleExecute truggers 'execute' event by Ctrl/Cmd+Enter
+// handleExecute triggers 'execute' event by Ctrl/Cmd+Enter
 function handleExecute(elem, event) {
     // Ctrl+Enter or Cmd+Enter
     if (!event.ctrlKey && !event.metaKey) {

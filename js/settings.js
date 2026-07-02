@@ -12,8 +12,8 @@ const ui = {
 ui.settings.addEventListener("submit", (event) => {
     event.preventDefault();
     localStorage.setItem("github.username", ui.github.username.value);
-    localStorage.setItem("github.token", ui.github.token.value);
-    localStorage.setItem("openai.apikey", ui.openai.apikey.value);
+    setSensitiveItem("github.token", ui.github.token.value);
+    setSensitiveItem("openai.apikey", ui.openai.apikey.value);
 });
 
 ui.github.username.addEventListener("change", (event) => {
@@ -21,13 +21,35 @@ ui.github.username.addEventListener("change", (event) => {
 });
 
 ui.github.token.addEventListener("change", (event) => {
-    localStorage.setItem("github.token", event.target.value);
+    setSensitiveItem("github.token", event.target.value);
 });
 
 ui.openai.apikey.addEventListener("change", (event) => {
-    localStorage.setItem("openai.apikey", event.target.value);
+    setSensitiveItem("openai.apikey", event.target.value);
 });
 
 ui.github.username.value = localStorage.getItem("github.username") || "";
-ui.github.token.value = localStorage.getItem("github.token") || "";
-ui.openai.apikey.value = localStorage.getItem("openai.apikey") || "";
+ui.github.token.value = getSensitiveItem("github.token");
+ui.openai.apikey.value = getSensitiveItem("openai.apikey");
+
+function setSensitiveItem(key, value) {
+    if (value) {
+        sessionStorage.setItem(key, value);
+    } else {
+        sessionStorage.removeItem(key);
+    }
+    localStorage.removeItem(key);
+}
+
+function getSensitiveItem(key) {
+    const sessionValue = sessionStorage.getItem(key);
+    if (sessionValue) {
+        return sessionValue;
+    }
+    const legacyValue = localStorage.getItem(key) || "";
+    if (legacyValue) {
+        sessionStorage.setItem(key, legacyValue);
+        localStorage.removeItem(key);
+    }
+    return legacyValue;
+}

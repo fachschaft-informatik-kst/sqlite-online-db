@@ -38,10 +38,10 @@ class CopyOnClick extends HTMLElement {
     }
 
     markSuccess() {
-        const text = this.innerText;
-        this.innerHTML = "copied!";
+        const text = this.textContent;
+        this.textContent = "copied!";
         setTimeout(() => {
-            this.innerHTML = text;
+            this.textContent = text;
         }, 500);
     }
 

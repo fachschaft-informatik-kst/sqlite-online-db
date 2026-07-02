@@ -160,7 +160,9 @@ function execute(sql) {
 // askAi queries the AI assistant using the contents of the editor
 // as a query and prints the answer.
 function askAi() {
-    const key = localStorage.getItem("openai.apikey");
+    const key =
+        sessionStorage.getItem("openai.apikey") ||
+        localStorage.getItem("openai.apikey");
     if (!key) {
         return visit("settings");
     }

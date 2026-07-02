@@ -50,7 +50,7 @@ function schemaItemToSql(item) {
     } else if (item.name.startsWith("sqlite_")) {
         return "";
     } else if (item.sql.startsWith("CREATE VIRTUAL TABLE")) {
-        const qtable = item.name.replace("'", "''");
+        const qtable = item.name.replaceAll("'", "''");
         return `INSERT INTO sqlite_schema(type,name,tbl_name,rootpage,sql)
             VALUES('table','${qtable}','${qtable}',0,'${item.sql}');`;
     } else if (item.sql.toUpperCase().startsWith(CREATE_TABLE_PREFIX)) {
@@ -81,11 +81,11 @@ function tableContentsToSql(database, item) {
     ) {
         return "";
     }
-    item.nameIdent = item.name.replace('"', '""');
+    item.nameIdent = item.name.replaceAll('"', '""');
     let res = database.execute(`PRAGMA table_info("${item.nameIdent}")`);
     const columnNames = res.values.map((row) => row[1]);
     const valuesArr = columnNames.map((name) => {
-        const col = name.replace('"', '""');
+        const col = name.replaceAll('"', '""');
         return `'||quote("${col}")||'`;
     });
     const values = valuesArr.join(",");

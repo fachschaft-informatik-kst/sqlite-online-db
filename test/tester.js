@@ -35,9 +35,9 @@ function wait(ms) {
     });
 }
 
-function mock(obj, property, repacement) {
+function mock(obj, property, replacement) {
     obj[`${property}.mocked`] = obj[property];
-    obj[property] = repacement;
+    obj[property] = replacement;
 }
 
 function unmock(obj, property) {

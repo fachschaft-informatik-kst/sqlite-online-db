@@ -1,5 +1,5 @@
 // Stores various database information
-// in brower storage.
+// in browser storage.
 
 const PREFIX = "sqlime";
 

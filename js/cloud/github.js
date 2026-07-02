@@ -21,7 +21,9 @@ class Github {
     // from the local storage.
     loadCredentials() {
         this.username = localStorage.getItem("github.username");
-        this.password = localStorage.getItem("github.token");
+        this.password =
+            sessionStorage.getItem("github.token") ||
+            localStorage.getItem("github.token");
         if (this.password) {
             this.headers.Authorization = `Token ${this.password}`;
         }
