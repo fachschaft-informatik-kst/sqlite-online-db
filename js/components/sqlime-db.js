@@ -60,7 +60,7 @@ class SqlimeDb extends HTMLElement {
             this.success(database);
             return true;
         } catch (exc) {
-            if (exc.message === "loading") {
+            if (exc.code === "SQLITE_LOADING") {
                 return false;
             }
             this.error(this.name, exc);

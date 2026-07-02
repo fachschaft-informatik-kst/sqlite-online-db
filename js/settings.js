@@ -13,7 +13,6 @@ ui.settings.addEventListener("submit", (event) => {
     event.preventDefault();
     localStorage.setItem("github.username", ui.github.username.value);
     setSensitiveItem("github.token", ui.github.token.value);
-    window.SqlimeOpenAiKey = (ui.openai.apikey.value || "").trim();
 });
 
 ui.github.username.addEventListener("change", (event) => {
@@ -24,8 +23,8 @@ ui.github.token.addEventListener("change", (event) => {
     setSensitiveItem("github.token", event.target.value);
 });
 
-ui.openai.apikey.addEventListener("change", (event) => {
-    window.SqlimeOpenAiKey = (event.target.value || "").trim();
+ui.openai.apikey.addEventListener("change", () => {
+    ui.openai.apikey.value = "";
 });
 
 ui.github.username.value = localStorage.getItem("github.username") || "";

@@ -16,7 +16,11 @@ const CONFIG = {
 // using the SQLite WASM API.
 async function init(gister, name, path) {
     if (sqlite3 === "loading") {
-        return Promise.reject(Error("loading"));
+        const error = new Error(
+            "SQLite is currently being initialized by another operation"
+        );
+        error.code = "SQLITE_LOADING";
+        return Promise.reject(error);
     }
     if (sqlite3 === undefined) {
         sqlite3 = "loading";
