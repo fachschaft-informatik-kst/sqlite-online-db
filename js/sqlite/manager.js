@@ -20,6 +20,10 @@ async function init(gister, name, path) {
     }
     if (sqlite3 === undefined) {
         sqlite3 = "loading";
+        if (typeof sqlite3InitModule !== "function") {
+            sqlite3 = undefined;
+            throw new Error("SQLite WASM engine is not available");
+        }
         sqlite3 = await sqlite3InitModule(CONFIG);
         const version = sqlite3.capi.sqlite3_libversion();
         console.log(`Loaded SQLite ${version}`);

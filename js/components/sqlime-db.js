@@ -20,7 +20,7 @@ class SqlimeDb extends HTMLElement {
     connectedCallback() {
         if (!this.loaded) {
             this.path = new DatabasePath(this.getAttribute("path"));
-            this.name = this.getAttribute("name") || path.extractName();
+            this.name = this.getAttribute("name") || this.path.extractName();
             this.tryLoad();
         }
     }

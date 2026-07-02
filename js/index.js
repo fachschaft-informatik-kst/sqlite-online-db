@@ -160,11 +160,13 @@ function execute(sql) {
 // askAi queries the AI assistant using the contents of the editor
 // as a query and prints the answer.
 function askAi() {
-    const key =
-        sessionStorage.getItem("openai.apikey") ||
-        localStorage.getItem("openai.apikey");
+    let key = (window.SqlimeOpenAiKey || "").trim();
     if (!key) {
-        return visit("settings");
+        key = (prompt("Enter OpenAI API key for this tab:") || "").trim();
+        if (!key) {
+            return Promise.resolve();
+        }
+        window.SqlimeOpenAiKey = key;
     }
     const ai = new OpenAI(key);
     const question = ui.editor.query;

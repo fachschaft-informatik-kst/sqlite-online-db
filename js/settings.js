@@ -13,7 +13,7 @@ ui.settings.addEventListener("submit", (event) => {
     event.preventDefault();
     localStorage.setItem("github.username", ui.github.username.value);
     setSensitiveItem("github.token", ui.github.token.value);
-    setSensitiveItem("openai.apikey", ui.openai.apikey.value);
+    window.SqlimeOpenAiKey = (ui.openai.apikey.value || "").trim();
 });
 
 ui.github.username.addEventListener("change", (event) => {
@@ -25,12 +25,14 @@ ui.github.token.addEventListener("change", (event) => {
 });
 
 ui.openai.apikey.addEventListener("change", (event) => {
-    setSensitiveItem("openai.apikey", event.target.value);
+    window.SqlimeOpenAiKey = (event.target.value || "").trim();
 });
 
 ui.github.username.value = localStorage.getItem("github.username") || "";
 ui.github.token.value = getSensitiveItem("github.token");
-ui.openai.apikey.value = getSensitiveItem("openai.apikey");
+ui.openai.apikey.value = "";
+localStorage.removeItem("openai.apikey");
+sessionStorage.removeItem("openai.apikey");
 
 function setSensitiveItem(key, value) {
     if (value) {
