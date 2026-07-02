@@ -1,6 +1,6 @@
 # SQLite Online DB (SQLime Fork für GitHub Pages)
 
-Dieses Repository wurde auf Basis von [nalgeon/sqlime](https://github.com/nalgeon/sqlime) umgestellt, damit die Anwendung direkt über **GitHub Pages** für Studierende verfügbar ist.
+Dieses Repository wurde auf Basis von [nalgeon/sqlime](https://github.com/nalgeon/sqlime) erstellt, damit SuS eine Online Umgebung zum Erstellen und Abfragen von relationalen Datenbanken verwenden können.
 
 ## Ziel
 
@@ -18,7 +18,7 @@ Dieses Repository wurde auf Basis von [nalgeon/sqlime](https://github.com/nalgeo
 ## Hinweise zur Fork-Basis
 
 - Codebasis stammt aus SQLime und wurde für Projekt-Pfade auf GitHub Pages angepasst (relative Asset-Pfade statt Root-Pfade).
-- Wenn ihr mit einem eigenen SQLime-Fork synchronisieren wollt, übernehmt regelmäßig die Änderungen aus dem Upstream-Projekt.
+- Wenn ihr mit einem eigenen SQLime-Fork synchronisieren wollt, übernehmt regelmässig die Änderungen aus dem Upstream-Projekt.
 
 ## Lokal testen
 
