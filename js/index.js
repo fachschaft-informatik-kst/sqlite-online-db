@@ -130,7 +130,6 @@ function unblockUi() {
 }
 
 function showRunFeedback(message) {
-    ui.status.loading(message);
     const btn = ui.buttons.execute;
     if (!btn) {
         return;
@@ -150,15 +149,10 @@ function executeWithFeedback(sql) {
     }
     const now = Date.now();
     if (now - state.lastRunAt < RUN_FEEDBACK_MS) {
-        showRunFeedback("Abfrage wird gerade ausgeführt.");
+        showRunFeedback("Letzter Lauf wird noch verarbeitet.");
         return Promise.resolve();
     }
     state.lastRunAt = now;
-    setTimeout(() => {
-        if (Date.now() - state.lastRunAt < RUN_FEEDBACK_PULSE_MS) {
-            ui.status.loading("Abfrage wird ausgeführt");
-        }
-    }, 120);
     return execute(sql);
 }
 
