@@ -69,13 +69,15 @@ class SQLite {
 
     // execute runs one ore more sql queries
     // and returns the last result.
-    execute(sql) {
+    execute(sql, updateQuery = true) {
         sql = (sql || "").replace(/\r?\n/g, " ").trim();
         if (!sql) {
             // sqlite api fails when trying to execute an empty query
             return null;
         }
-        this.query = sql;
+        if (updateQuery) {
+            this.query = sql;
+        }
         let rows = [];
         this.db.exec({
             sql: sql,
@@ -155,7 +157,7 @@ class SQLite {
     // getTableInfo returns the table schema.
     getTableInfo(table) {
         const sql = QUERIES.tableInfo.replaceAll("{}", table);
-        return this.execute(sql);
+        return this.execute(sql, false);
     }
 
     getAutocompleteSchema() {

@@ -128,6 +128,15 @@ async function testLoadUrlShowsSchemaView() {
     );
 }
 
+async function testLoadUrlWithoutCachedQueryShowsEmptyEditor() {
+    log("Load url without cached query...");
+    const app = await loadApp();
+    app.window.location.assign("../index.html#demo.db");
+    await wait(MEDIUM_DELAY);
+    assert("shows schema view", app.ui.status.value == "2 tables:");
+    assert("editor stays empty without cached query", app.ui.editor.value == "");
+}
+
 async function testLoadGist() {
     log("Load gist...");
     const app = await loadApp();
@@ -316,7 +325,10 @@ async function runTests() {
     await testLoadDemo();
     await testLoadUrl();
     await testLoadUrlInvalid();
+    await testLoadUrlWithoutCachedQueryShowsEmptyEditor();
+    await testLoadUrlShowsSchemaView();
     await testLoadGist();
+    await testLoadGistEncodedHash();
     await testLoadGistInvalid();
     await testShowTables();
     await testSaveEmpty();
