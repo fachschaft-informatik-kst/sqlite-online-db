@@ -209,6 +209,9 @@ async function start(name, path) {
             ui.status.error(`Failed to load database from ${path}`);
             return false;
         }
+        if (database.tables && database.tables.length) {
+            database.showSchemaView = true;
+        }
     } catch (exc) {
         ui.status.error(`Failed to load database from ${path}: ${exc}`);
         return false;
@@ -217,15 +220,15 @@ async function start(name, path) {
     }
 
     const storedQuery = storage.get(database.name);
-    const preferSchemaView = ["local", "remote", "binary"].includes(path.type);
-    database.query = preferSchemaView
-        ? database.query || ""
-        : database.query || storedQuery;
+    const preferSchemaView = ["local", "remote", "binary", "id"].includes(path.type);
+    const initialQuery = database.query || storedQuery || "";
+    database.query = initialQuery;
+    database.showSchemaView = preferSchemaView;
 
     document.title = database.meaningfulName || document.title;
     ui.name.ready(database.name);
     ui.status.info(MESSAGES.invite);
-    ui.editor.value = database.query;
+    ui.editor.value = database.query || "";
     ui.editor.focus();
 
     return true;
@@ -346,13 +349,13 @@ function showStarted() {
             ? database.getAutocompleteSchema()
             : {};
     }
-    if (database.tables.length) {
-        if (database.query && database.query.trim()) {
-            execute(database.query);
-        } else {
-            ui.editor.value = "";
-            showTables();
-        }
+    const shouldShowSchemaView = Boolean(
+        database.showSchemaView ||
+            (database.tables.length && (!database.query || !database.query.trim()))
+    );
+    if (shouldShowSchemaView) {
+        ui.editor.value = database.query || "";
+        showTables();
         enableCommandBar();
     } else if (database.query) {
         execute(database.query);

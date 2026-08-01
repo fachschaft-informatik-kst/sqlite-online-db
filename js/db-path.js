@@ -10,8 +10,17 @@
 
 class DatabasePath {
     constructor(value, type = null) {
-        this.value = value;
-        this.type = type || this.inferType(value);
+        const decodedValue = decodeValue(value);
+        this.value = decodedValue;
+        this.type = type || this.inferType(this.value);
+        if (this.type === "id") {
+            const [prefix, maybeId] = this.value.split(":");
+            if (!prefix || prefix === "gist") {
+                this.value = this.value.includes(":")
+                    ? this.value
+                    : `gist:${this.value}`;
+            }
+        }
     }
 
     // inferType guesses the path type by its value.
@@ -66,6 +75,17 @@ class DatabasePath {
         } else {
             return "empty value";
         }
+    }
+}
+
+function decodeValue(value) {
+    if (typeof value !== "string") {
+        return value;
+    }
+    try {
+        return decodeURIComponent(value);
+    } catch (error) {
+        return value;
     }
 }
 

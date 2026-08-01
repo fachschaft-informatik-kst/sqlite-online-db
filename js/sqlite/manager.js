@@ -149,6 +149,7 @@ async function loadGist(gister, path) {
     database.id = gist.id;
     database.owner = gist.owner;
     database.execute(gist.schema);
+    database.gatherTables();
     database.query = gist.query;
     database.calcHashcode();
     database.ensureName();
