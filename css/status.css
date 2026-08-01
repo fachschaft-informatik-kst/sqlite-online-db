@@ -4,6 +4,22 @@
     line-height: 1.3;
 }
 
+.sqlime-status--loading {
+    color: var(--sqlime-blue);
+}
+
+.sqlime-status__loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.sqlime-status__loading .sqlime-spinner {
+    width: 0.95rem;
+    height: 0.95rem;
+    border-width: 2px;
+}
+
 .sqlime-status--success::before {
     display: inline-block;
     width: 1rem;

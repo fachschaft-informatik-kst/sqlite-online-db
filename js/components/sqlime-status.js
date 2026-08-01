@@ -16,13 +16,17 @@ class SqlimeStatus extends HTMLElement {
 
     // loading shows the message with a spinner
     loading(message) {
-        this.el.className = "";
-        this.value = `<span class="sqlime-spinner"></span> ${message}...`;
+        this.el.className = "sqlime-status--loading";
+        this.value = `
+<span class="sqlime-status__loading">
+    <span class="sqlime-spinner" aria-hidden="true"></span>
+    <span>${message}</span>
+</span>`;
     }
 
     // success shows the message and marks is as success
     success(message) {
-        this.el.className = "sql-status--success";
+        this.el.className = "sqlime-status--success";
         this.value = message;
     }
 
@@ -34,7 +38,7 @@ class SqlimeStatus extends HTMLElement {
 
     // error shows the message and marks is as error
     error(message) {
-        this.el.className = "sql-status--error";
+        this.el.className = "sqlime-status--error";
         this.value = message;
     }
 

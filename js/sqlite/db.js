@@ -14,8 +14,21 @@ const QUERIES = {
         and name not like 'sqlean_%'`,
     tableContent: "select * from {} limit 10",
     tableInfo: `select
-      iif(pk=1, '✓', '') as pk, name, type, iif("notnull"=0, '✓', '') as "null?"
-      from pragma_table_info('{}')`,
+            iif(pk>0, '✓', '') as pk,
+            iif(exists(
+                    select 1
+                    from pragma_foreign_key_list('{}') fk
+                    where fk."from" = ti.name
+            ), '✓', '') as fk,
+            ifnull((
+                select group_concat(fk."table" || '.' || fk."to", ', ')
+                from pragma_foreign_key_list('{}') fk
+                where fk."from" = ti.name
+            ), '') as "ref",
+            name,
+            type,
+            iif("notnull"=0, '✓', '') as "null?"
+            from pragma_table_info('{}') ti`,
 };
 
 // database messages
@@ -102,7 +115,7 @@ class SQLite {
 
     // getTableInfo returns the table schema.
     getTableInfo(table) {
-        const sql = QUERIES.tableInfo.replace("{}", table);
+        const sql = QUERIES.tableInfo.replaceAll("{}", table);
         return this.execute(sql);
     }
 

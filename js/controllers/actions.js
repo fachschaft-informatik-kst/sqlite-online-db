@@ -15,11 +15,8 @@ class ActionController {
     // onClick executes an action
     // according to the button clicked
     onClick(event) {
-        const btn =
-            event.target.tagName == "BUTTON"
-                ? event.target
-                : event.target.parentElement;
-        if (btn.tagName != "BUTTON") {
+        const btn = event.target.closest("button[data-action]");
+        if (!btn) {
             return;
         }
 

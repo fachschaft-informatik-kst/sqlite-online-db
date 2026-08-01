@@ -100,7 +100,7 @@ async function startFromFile(file, contents, fileType) {
 // using specified database path
 async function start(name, path) {
     ui.result.clear();
-    ui.status.info(MESSAGES.loading);
+    ui.status.loading(MESSAGES.loading);
 
     try {
         const loadedDatabase = await manager.init(gister, name, path);
@@ -200,7 +200,7 @@ async function save() {
     if (!gister.hasCredentials()) {
         return visit("settings");
     }
-    ui.status.info("Saving...");
+    ui.status.loading("Saving");
     ui.result.clear();
     try {
         const savedDatabase = await manager.save(gister, database, query);
