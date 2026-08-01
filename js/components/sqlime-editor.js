@@ -105,7 +105,12 @@ class SqlimeEditor extends HTMLElement {
 
     get query() {
         const selectedQuery = window.getSelection().toString().trim();
-        return selectedQuery || this.value;
+        const text = selectedQuery || this.value;
+        return String(text)
+            .replace(/\r\n?/g, "\n")
+            .replace(/\s*\n\s*/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
     }
 }
 
