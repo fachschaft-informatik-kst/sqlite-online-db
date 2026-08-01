@@ -20,6 +20,39 @@
     border-width: 2px;
 }
 
+.sqlime-loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgb(255 255 255 / 0.7);
+    backdrop-filter: blur(1px);
+}
+
+.sqlime-loading-overlay--visible {
+    display: flex;
+}
+
+.sqlime-loading-overlay__card {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 1rem;
+    border: 1px solid var(--sqlime-gray);
+    border-radius: 0.25rem;
+    background: var(--sqlime-white);
+    box-shadow: 0 0.4rem 1.2rem rgb(0 0 0 / 0.15);
+    color: var(--sqlime-blue);
+}
+
+.sqlime-loading-overlay__card .sqlime-spinner {
+    width: 1.1rem;
+    height: 1.1rem;
+    border-width: 2px;
+}
+
 .sqlime-status--success::before {
     display: inline-block;
     width: 1rem;

@@ -21,6 +21,22 @@
     color: var(--sqlime-white);
 }
 
+.sqlime-commandbar__run-feedback {
+    animation: run-feedback 0.24s ease-in-out;
+}
+
+@keyframes run-feedback {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.04);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
 .sqlime-commandbar > button:disabled {
     pointer-events: none;
     opacity: 0.5;

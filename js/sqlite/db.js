@@ -20,6 +20,14 @@ const QUERIES = {
                     from pragma_foreign_key_list('{}') fk
                     where fk."from" = ti.name
             ), '✓', '') as fk,
+            iif(exists(
+                select 1
+                from pragma_index_list('{}') il
+                join pragma_index_info(il.name) ii
+                  on ii.name = ti.name
+                where il."unique" = 1
+                  and ifnull(il.origin, '') != 'pk'
+            ), '✓', '') as "unique",
             ifnull((
                 select group_concat(fk."table" || '.' || fk."to", ', ')
                 from pragma_foreign_key_list('{}') fk

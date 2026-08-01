@@ -48,6 +48,26 @@ const shortcuts = {
 };
 
 const DEMO_URL = "#demo.db";
+const RUN_FEEDBACK_MS = 600;
+const LOADING_OVERLAY_ID = "sqlime-loading-overlay";
+const BLOCKED_EVENTS = [
+    "keydown",
+    "keypress",
+    "keyup",
+    "click",
+    "mousedown",
+    "mouseup",
+    "pointerdown",
+    "pointerup",
+    "touchstart",
+    "touchend",
+    "paste",
+];
+
+const state = {
+    blockCount: 0,
+    lastRunAt: 0,
+};
 
 let database;
 
@@ -55,8 +75,86 @@ let database;
 window.app = {
     actions: actions,
     gister: gister,
+    state: state,
     ui: ui,
 };
+
+function ensureLoadingOverlay() {
+    let overlay = document.querySelector(`#${LOADING_OVERLAY_ID}`);
+    if (overlay) {
+        return overlay;
+    }
+    overlay = document.createElement("div");
+    overlay.id = LOADING_OVERLAY_ID;
+    overlay.className = "sqlime-loading-overlay";
+    overlay.innerHTML = `
+<div class="sqlime-loading-overlay__card" role="status" aria-live="polite" aria-busy="true">
+    <span class="sqlime-spinner" aria-hidden="true"></span>
+    <span class="sqlime-loading-overlay__text">Loading...</span>
+</div>`;
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+function preventInputWhileBlocked(event) {
+    if (state.blockCount === 0) {
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+}
+
+for (const eventName of BLOCKED_EVENTS) {
+    document.addEventListener(eventName, preventInputWhileBlocked, true);
+}
+
+function blockUi(message = "Loading...") {
+    state.blockCount += 1;
+    const overlay = ensureLoadingOverlay();
+    const text = overlay.querySelector(".sqlime-loading-overlay__text");
+    text.innerText = message;
+    overlay.classList.add("sqlime-loading-overlay--visible");
+}
+
+function unblockUi() {
+    state.blockCount = Math.max(0, state.blockCount - 1);
+    if (state.blockCount > 0) {
+        return;
+    }
+    const overlay = document.querySelector(`#${LOADING_OVERLAY_ID}`);
+    if (!overlay) {
+        return;
+    }
+    overlay.classList.remove("sqlime-loading-overlay--visible");
+}
+
+function showRunFeedback(message) {
+    ui.status.info(message);
+    const btn = ui.buttons.execute;
+    if (!btn) {
+        return;
+    }
+    btn.classList.remove("sqlime-commandbar__run-feedback");
+    void btn.offsetWidth;
+    btn.classList.add("sqlime-commandbar__run-feedback");
+    setTimeout(() => {
+        btn.classList.remove("sqlime-commandbar__run-feedback");
+    }, 260);
+}
+
+function executeWithFeedback(sql) {
+    if (state.blockCount > 0) {
+        showRunFeedback("Please wait until loading has finished.");
+        return Promise.resolve();
+    }
+    const now = Date.now();
+    if (now - state.lastRunAt < RUN_FEEDBACK_MS) {
+        showRunFeedback("Query was just executed.");
+        return Promise.resolve();
+    }
+    state.lastRunAt = now;
+    return execute(sql);
+}
 
 // startFromCurrentUrl loads existing database or creates a new one
 // using current window location as database path
@@ -101,6 +199,7 @@ async function startFromFile(file, contents, fileType) {
 async function start(name, path) {
     ui.result.clear();
     ui.status.loading(MESSAGES.loading);
+    blockUi(MESSAGES.loading);
 
     try {
         const loadedDatabase = await manager.init(gister, name, path);
@@ -113,6 +212,8 @@ async function start(name, path) {
     } catch (exc) {
         ui.status.error(`Failed to load database from ${path}: ${exc}`);
         return false;
+    } finally {
+        unblockUi();
     }
 
     database.query = database.query || storage.get(database.name);
@@ -128,7 +229,7 @@ async function start(name, path) {
 
 // executeCurrent runs the current SQL query
 function executeCurrent() {
-    return execute(ui.editor.query);
+    return executeWithFeedback(ui.editor.query);
 }
 
 // execute runs SQL query on the database
@@ -159,7 +260,7 @@ function execute(sql) {
 
 // askAi queries the AI assistant using the contents of the editor
 // as a query and prints the answer.
-function askAi() {
+async function askAi() {
     const key = (prompt("Enter OpenAI API key for this request:") || "").trim();
     if (!key) {
         return Promise.resolve();
@@ -167,19 +268,20 @@ function askAi() {
     const ai = new OpenAI(key);
     const question = ui.editor.query;
     ui.status.loading("Waiting for AI response (can take up to 30 seconds)");
+    blockUi("Waiting for AI response...");
     timeit.start();
-    const promise = ai
-        .ask(question)
-        .then((answer) => {
-            const elapsed = timeit.finish() / 1000;
-            ui.status.success(`AI response, took ${elapsed} sec:`);
-            ui.result.printMarkdown(answer);
-        })
-        .catch((err) => {
-            ui.status.error(err);
-            ui.result.clear();
-        });
-    return promise;
+    try {
+        const answer = await ai.ask(question);
+        const elapsed = timeit.finish() / 1000;
+        ui.status.success(`AI response, took ${elapsed} sec:`);
+        ui.result.printMarkdown(answer);
+    } catch (err) {
+        ui.status.error(err);
+        ui.result.clear();
+    } finally {
+        unblockUi();
+    }
+    return Promise.resolve();
 }
 
 // openUrl loads database from local or remote url
@@ -201,6 +303,7 @@ async function save() {
         return visit("settings");
     }
     ui.status.loading("Saving");
+    blockUi("Saving...");
     ui.result.clear();
     try {
         const savedDatabase = await manager.save(gister, database, query);
@@ -212,6 +315,8 @@ async function save() {
     } catch (exc) {
         showError(`Failed to save database to ${gister.name}: ${exc}`);
         return Promise.reject(exc);
+    } finally {
+        unblockUi();
     }
     changeName(database.name);
     showSaved(database);
@@ -381,7 +486,7 @@ window.addEventListener("popstate", () => {
 
 // SQL editor 'execute' event
 ui.editor.addEventListener("execute", (event) => {
-    execute(event.detail);
+    executeWithFeedback(event.detail);
 });
 
 // SQL editor 'started typing' event
