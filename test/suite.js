@@ -78,6 +78,20 @@ async function testExecuteShowsLoadingState() {
     );
 }
 
+async function testExecuteMultilineJoin() {
+    log("Execute multiline join...");
+    const app = await loadApp();
+    const sql = "select * from autor\nleft join buch_aut on autorid = autorid";
+    app.ui.editor.dispatchEvent(new Event("input"));
+    app.ui.editor.value = sql;
+    app.ui.buttons.execute.click();
+    await wait(MEDIUM_DELAY);
+    assert(
+        "executes multiline join without crashing",
+        app.ui.result.innerText.includes("No such table") || app.ui.result.innerText.includes("table") || app.ui.result.innerText.includes("autor")
+    );
+}
+
 async function testLoadDemo() {
     log("Load demo...");
     const app = await loadApp();

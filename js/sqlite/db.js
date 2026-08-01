@@ -47,6 +47,18 @@ const MESSAGES = {
     loading: "Loading database...",
 };
 
+function normalizeSql(sql) {
+    if (!sql) {
+        return "";
+    }
+    return String(sql)
+        .replace(/\r\n?/g, "\n")
+        .replace(/[\t\u00A0]+/g, " ")
+        .replace(/\s*\n\s*/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 // SQLite database wrapper.
 // Wraps SQLite WASM API and calls it in the following methods:
 //   - execute()
