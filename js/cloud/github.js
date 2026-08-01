@@ -47,11 +47,11 @@ class Github {
             headers: this.headers,
         })
             .then((response) => http.toJson(response))
-            .then((response) => {
+            .then(async (response) => {
                 if (!response.files || !("query.sql" in response.files)) {
                     return null;
                 }
-                return buildGist(response);
+                return await buildGist(response);
             });
         return promise;
     }
@@ -98,15 +98,36 @@ function buildData(name, schema, query) {
     };
 }
 
+// fileContent returns complete file content.
+// The Gist API may truncate large files in `content`.
+async function fileContent(file) {
+    if (!file) {
+        return "";
+    }
+    if (typeof file.content === "string" && !file.truncated) {
+        return file.content;
+    }
+    if (!file.raw_url) {
+        return file.content || "";
+    }
+    const response = await fetch(file.raw_url, { method: "get" });
+    if (!response.ok) {
+        return file.content || "";
+    }
+    return await response.text();
+}
+
 // buildGist creates a gist from the GitHub response.
-function buildGist(response) {
+async function buildGist(response) {
+    const schema = await fileContent(response.files["schema.sql"]);
+    const query = await fileContent(response.files["query.sql"]);
     const gist = {
         id: response.id,
         prefix: ID_PREFIX,
         name: response.description,
-        owner: response.owner.login,
-        schema: response.files["schema.sql"].content,
-        query: response.files["query.sql"].content,
+        owner: response.owner ? response.owner.login : "",
+        schema: schema,
+        query: query,
     };
     if (gist.schema == "--") {
         gist.schema = "";
