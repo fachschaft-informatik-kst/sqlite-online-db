@@ -346,6 +346,7 @@ function showStarted() {
         execute(database.query);
         enableCommandBar();
     } else if (database.tables.length) {
+        ui.editor.value = "";
         showTables();
         enableCommandBar();
     } else {
