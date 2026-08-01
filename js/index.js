@@ -49,6 +49,7 @@ const shortcuts = {
 
 const DEMO_URL = "#demo.db";
 const RUN_FEEDBACK_MS = 600;
+const RUN_FEEDBACK_PULSE_MS = 1400;
 const LOADING_OVERLAY_ID = "sqlime-loading-overlay";
 const BLOCKED_EVENTS = [
     "keydown",
@@ -129,7 +130,7 @@ function unblockUi() {
 }
 
 function showRunFeedback(message) {
-    ui.status.info(message);
+    ui.status.loading(message);
     const btn = ui.buttons.execute;
     if (!btn) {
         return;
@@ -144,15 +145,20 @@ function showRunFeedback(message) {
 
 function executeWithFeedback(sql) {
     if (state.blockCount > 0) {
-        showRunFeedback("Please wait until loading has finished.");
+        showRunFeedback("Bitte warten, bis der Vorgang fertig ist.");
         return Promise.resolve();
     }
     const now = Date.now();
     if (now - state.lastRunAt < RUN_FEEDBACK_MS) {
-        showRunFeedback("Query was just executed.");
+        showRunFeedback("Abfrage wird gerade ausgeführt.");
         return Promise.resolve();
     }
     state.lastRunAt = now;
+    setTimeout(() => {
+        if (Date.now() - state.lastRunAt < RUN_FEEDBACK_PULSE_MS) {
+            ui.status.loading("Abfrage wird ausgeführt");
+        }
+    }, 120);
     return execute(sql);
 }
 
@@ -337,6 +343,11 @@ function changeName(name) {
 
 // showStarted shows the result of successful database load
 function showStarted() {
+    if (ui.editor && typeof ui.editor === "object") {
+        ui.editor.schema = database.getAutocompleteSchema
+            ? database.getAutocompleteSchema()
+            : {};
+    }
     if (database.query) {
         execute(database.query);
         enableCommandBar();
@@ -400,6 +411,21 @@ function showWelcome() {
 // showResult shows results and timing
 // of the SQL query execution
 function showResult(result, elapsed) {
+    if (result && result.meta && result.meta.changes !== undefined) {
+        const count = result.meta.changes;
+        const singular = count == 1 ? "row" : "rows";
+        const action =
+            result.meta.action == "insert"
+                ? "inserted"
+                : result.meta.action == "delete"
+                ? "deleted"
+                : result.meta.action == "replace"
+                ? "replaced"
+                : "affected";
+        ui.status.success(`${count} ${singular} ${action}, took ${elapsed} ms`);
+        ui.result.print("");
+        return;
+    }
     if (result && result.values.length) {
         ui.status.success(`${result.values.length} rows, took ${elapsed} ms`);
         ui.result.print(result);

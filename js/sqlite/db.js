@@ -20,14 +20,6 @@ const QUERIES = {
                     from pragma_foreign_key_list('{}') fk
                     where fk."from" = ti.name
             ), '✓', '') as fk,
-            iif(exists(
-                select 1
-                from pragma_index_list('{}') il
-                join pragma_index_info(il.name) ii
-                  on ii.name = ti.name
-                where il."unique" = 1
-                  and ifnull(il.origin, '') != 'pk'
-            ), '✓', '') as "unique",
             ifnull((
                 select group_concat(fk."table" || '.' || fk."to", ', ')
                 from pragma_foreign_key_list('{}') fk
@@ -35,7 +27,15 @@ const QUERIES = {
             ), '') as "ref",
             name,
             type,
-            iif("notnull"=0, '✓', '') as "null?"
+            iif("notnull"=0, '✓', '') as "null?",
+            iif(exists(
+                select 1
+                from pragma_index_list('{}') il
+                join pragma_index_info(il.name) ii
+                  on ii.name = ti.name
+                where il."unique" = 1
+                  and ifnull(il.origin, '') != 'pk'
+            ), '✓', '') as "unique"
             from pragma_table_info('{}') ti`,
 };
 
@@ -82,6 +82,10 @@ class SQLite {
             resultRows: rows,
         });
         if (!rows.length) {
+            const changeResult = this.describeChanges();
+            if (changeResult) {
+                return changeResult;
+            }
             return null;
         }
         const result = {
@@ -92,6 +96,32 @@ class SQLite {
             result.values.push(Object.values(row));
         }
         return result;
+    }
+
+    describeChanges() {
+        const statement = (this.query || "").trim();
+        if (!/^\s*(insert|update|delete|replace)\b/i.test(statement)) {
+            return null;
+        }
+        let rows = [];
+        this.db.exec({
+            sql: "select changes() as changes",
+            rowMode: "object",
+            resultRows: rows,
+        });
+        if (!rows.length) {
+            return null;
+        }
+        const changes = Number(rows[0].changes || 0);
+        const action = statement.split(/\s+/)[0].toLowerCase();
+        return {
+            columns: ["changes"],
+            values: [[changes]],
+            meta: {
+                changes,
+                action,
+            },
+        };
     }
 
     // each runs the query and invokes the callback
@@ -125,6 +155,25 @@ class SQLite {
     getTableInfo(table) {
         const sql = QUERIES.tableInfo.replaceAll("{}", table);
         return this.execute(sql);
+    }
+
+    getAutocompleteSchema() {
+        const schema = {};
+        const tables = this.gatherTables();
+        for (const table of tables) {
+            const result = this.getTableInfo(table);
+            schema[table] = [];
+            if (!result || !result.values) {
+                continue;
+            }
+            for (const row of result.values) {
+                const name = row[3];
+                if (name) {
+                    schema[table].push(name);
+                }
+            }
+        }
+        return schema;
     }
 
     // calcHashcode fills the `.hashcode` attribute

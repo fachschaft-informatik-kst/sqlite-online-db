@@ -225,6 +225,32 @@ async function testUpdate() {
     unmock(app.gister, "create");
 }
 
+async function testAutocomplete() {
+    log("Autocomplete...");
+    const app = await loadApp();
+    app.ui.editor.schema = {
+        employees: ["id", "name", "department"],
+    };
+    app.ui.editor.value = "sel";
+
+    const textNode = document.createTextNode("sel");
+    app.ui.editor.textContent = "";
+    app.ui.editor.appendChild(textNode);
+
+    const selection = app.window.getSelection();
+    const range = document.createRange();
+    range.setStart(textNode, 3);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    app.ui.editor.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", bubbles: true })
+    );
+
+    assert("completes keyword on Tab", app.ui.editor.value == "SELECT");
+}
+
 async function testChangeName() {
     log("Change database name...");
     const app = await loadApp();
@@ -249,6 +275,7 @@ async function runTests() {
     await testSaveEmpty();
     await testSave();
     await testUpdate();
+    await testAutocomplete();
     await testChangeName();
     summary();
 }
@@ -259,7 +286,13 @@ async function loadApp(timeout = LONG_DELAY) {
     const app = {};
     app.frame = document.querySelector("#app");
     app.frame.src = "../index.html";
-    await wait(timeout);
+    const start = Date.now();
+    while (!app.frame.contentWindow || !app.frame.contentWindow.app) {
+        if (Date.now() - start > timeout) {
+            break;
+        }
+        await wait(SMALL_DELAY);
+    }
     app.window = app.frame.contentWindow;
     app.document = app.window.document;
     app.actions = app.window.app.actions;

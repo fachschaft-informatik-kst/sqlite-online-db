@@ -1,5 +1,45 @@
 // SQL editor component
 const TAB_WIDTH = 2;
+const KEYWORDS = [
+    "SELECT",
+    "FROM",
+    "WHERE",
+    "INNER",
+    "JOIN",
+    "LEFT",
+    "RIGHT",
+    "FULL",
+    "ON",
+    "GROUP",
+    "BY",
+    "ORDER",
+    "LIMIT",
+    "INSERT",
+    "INTO",
+    "VALUES",
+    "UPDATE",
+    "SET",
+    "DELETE",
+    "CREATE",
+    "TABLE",
+    "ALTER",
+    "DROP",
+    "PRIMARY",
+    "KEY",
+    "FOREIGN",
+    "REFERENCES",
+    "UNIQUE",
+    "NOT",
+    "NULL",
+    "AND",
+    "OR",
+    "AS",
+    "COUNT",
+    "SUM",
+    "AVG",
+    "MAX",
+    "MIN",
+];
 
 class SqlimeEditor extends HTMLElement {
     connectedCallback() {
@@ -41,8 +81,9 @@ class SqlimeEditor extends HTMLElement {
     }
 
     onKeydown(event) {
-        if (handleIndent(this, event)) return;
         if (handleExecute(this, event)) return;
+        if (handleAutocomplete(this, event)) return;
+        if (handleIndent(this, event)) return;
     }
 
     onPaste(event) {
@@ -56,15 +97,15 @@ class SqlimeEditor extends HTMLElement {
     }
 
     get value() {
-        return this.innerText;
+        return this.textContent || "";
     }
     set value(newValue) {
-        this.innerText = newValue;
+        this.textContent = newValue || "";
     }
 
     get query() {
         const selectedQuery = window.getSelection().toString().trim();
-        return selectedQuery || this.innerText;
+        return selectedQuery || this.value;
     }
 }
 
@@ -76,6 +117,63 @@ function handleIndent(elem, event) {
     event.preventDefault();
     document.execCommand("insertHTML", false, " ".repeat(TAB_WIDTH));
     return true;
+}
+
+function handleAutocomplete(elem, event) {
+    const isTab =
+        event.key === "Tab" ||
+        event.code === "Tab" ||
+        event.keyCode === 9;
+    if (!isTab) {
+        return false;
+    }
+    const token = getCurrentToken(elem.value);
+    if (!token) {
+        return false;
+    }
+    const completion = findCompletion(token, elem);
+    if (!completion || completion == token.toUpperCase()) {
+        return false;
+    }
+    event.preventDefault();
+    elem.value = replaceToken(elem.value, token, completion);
+    return true;
+}
+
+function getCurrentToken(text) {
+    const match = text.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
+    return match ? match[1] : "";
+}
+
+function findCompletion(token, elem) {
+    const normalized = token.toUpperCase();
+    const options = [];
+    const known = new Set(KEYWORDS);
+    if (elem.schema) {
+        for (const table of Object.keys(elem.schema)) {
+            known.add(table.toUpperCase());
+            for (const column of elem.schema[table] || []) {
+                known.add(column.toUpperCase());
+            }
+        }
+    }
+    for (const word of known) {
+        if (word.startsWith(normalized)) {
+            options.push(word);
+        }
+    }
+    if (!options.length) {
+        return null;
+    }
+    options.sort();
+    return options[0];
+}
+
+function replaceToken(text, token, completion) {
+    if (!text.endsWith(token)) {
+        return text;
+    }
+    return text.slice(0, text.length - token.length) + completion;
 }
 
 // handleExecute triggers 'execute' event by Ctrl/Cmd+Enter
