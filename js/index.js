@@ -70,6 +70,18 @@ const state = {
     lastRunAt: 0,
 };
 
+function normalizeSql(sql) {
+    if (!sql) {
+        return "";
+    }
+    return String(sql)
+        .replace(/\r\n?/g, "\n")
+        .replace(/[\t\u00A0]+/g, " ")
+        .replace(/\s*\n\s*/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 let database;
 
 // for testing purposes
@@ -242,7 +254,7 @@ function executeCurrent() {
 // execute runs SQL query on the database
 // and shows results
 function execute(sql) {
-    sql = (sql || "").replace(/\r?\n/g, " ").trim();
+    sql = normalizeSql(sql);
     storage.set(database.name, sql);
     if (!sql) {
         ui.status.info(MESSAGES.invite);
