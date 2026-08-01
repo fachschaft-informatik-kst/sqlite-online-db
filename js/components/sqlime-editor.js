@@ -127,7 +127,9 @@ function handleAutocomplete(elem, event) {
     if (!isTab) {
         return false;
     }
-    const token = getCurrentToken(elem.value);
+    const selection = window.getSelection();
+    const cursor = getCursorPosition(selection, elem.value.length);
+    const token = getCurrentToken(elem.value, cursor);
     if (!token) {
         return false;
     }
@@ -136,12 +138,15 @@ function handleAutocomplete(elem, event) {
         return false;
     }
     event.preventDefault();
-    elem.value = replaceToken(elem.value, token, completion);
+    const { text, newCursor } = replaceToken(elem.value, token, completion, cursor);
+    elem.value = text;
+    setCursorPosition(elem, newCursor);
     return true;
 }
 
-function getCurrentToken(text) {
-    const match = text.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
+function getCurrentToken(text, cursor = text.length) {
+    const before = text.slice(0, cursor);
+    const match = before.match(/([A-Za-z_][A-Za-z0-9_]*)$/);
     return match ? match[1] : "";
 }
 
@@ -169,11 +174,40 @@ function findCompletion(token, elem) {
     return options[0];
 }
 
-function replaceToken(text, token, completion) {
-    if (!text.endsWith(token)) {
-        return text;
+function replaceToken(text, token, completion, cursor) {
+    const before = text.slice(0, cursor);
+    const after = text.slice(cursor);
+    const tokenStart = before.lastIndexOf(token);
+    if (tokenStart < 0) {
+        return { text, newCursor: cursor };
     }
-    return text.slice(0, text.length - token.length) + completion;
+    const newText = before.slice(0, tokenStart) + completion + after;
+    const newCursor = tokenStart + completion.length;
+    return { text: newText, newCursor };
+}
+
+function getCursorPosition(selection, fallback) {
+    if (selection && selection.rangeCount) {
+        const range = selection.getRangeAt(0);
+        if (Number.isFinite(range.startOffset)) {
+            return range.startOffset;
+        }
+    }
+    return fallback;
+}
+
+function setCursorPosition(elem, position) {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    const textNode = elem.firstChild || elem.ownerDocument.createTextNode("");
+    if (!elem.firstChild) {
+        elem.appendChild(textNode);
+    }
+    const offset = Math.min(position, textNode.textContent.length);
+    range.setStart(textNode, offset);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
 }
 
 // handleExecute triggers 'execute' event by Ctrl/Cmd+Enter
