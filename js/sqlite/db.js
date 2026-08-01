@@ -70,6 +70,7 @@ class SQLite {
     // execute runs one ore more sql queries
     // and returns the last result.
     execute(sql) {
+        sql = (sql || "").replace(/\r?\n/g, " ").trim();
         if (!sql) {
             // sqlite api fails when trying to execute an empty query
             return null;

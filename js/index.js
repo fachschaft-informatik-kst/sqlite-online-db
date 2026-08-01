@@ -216,7 +216,11 @@ async function start(name, path) {
         unblockUi();
     }
 
-    database.query = database.query || storage.get(database.name);
+    const storedQuery = storage.get(database.name);
+    const preferSchemaView = ["local", "remote", "binary"].includes(path.type);
+    database.query = preferSchemaView
+        ? database.query || ""
+        : database.query || storedQuery;
 
     document.title = database.meaningfulName || document.title;
     ui.name.ready(database.name);
@@ -235,7 +239,7 @@ function executeCurrent() {
 // execute runs SQL query on the database
 // and shows results
 function execute(sql) {
-    sql = sql.trim();
+    sql = (sql || "").replace(/\r?\n/g, " ").trim();
     storage.set(database.name, sql);
     if (!sql) {
         ui.status.info(MESSAGES.invite);
@@ -244,7 +248,7 @@ function execute(sql) {
     }
     try {
         ui.status.fadeOut();
-        ui.status.info(MESSAGES.executing);
+        ui.status.loading(MESSAGES.executing);
         timeit.start();
         const result = database.execute(sql);
         const elapsed = timeit.finish();
@@ -342,12 +346,16 @@ function showStarted() {
             ? database.getAutocompleteSchema()
             : {};
     }
-    if (database.query) {
-        execute(database.query);
+    if (database.tables.length) {
+        if (database.query && database.query.trim()) {
+            execute(database.query);
+        } else {
+            ui.editor.value = "";
+            showTables();
+        }
         enableCommandBar();
-    } else if (database.tables.length) {
-        ui.editor.value = "";
-        showTables();
+    } else if (database.query) {
+        execute(database.query);
         enableCommandBar();
     } else {
         showWelcome();

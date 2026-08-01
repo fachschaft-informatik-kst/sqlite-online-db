@@ -62,6 +62,22 @@ async function testExecuteSelection() {
     );
 }
 
+async function testExecuteShowsLoadingState() {
+    log("Execute shows loading state...");
+    const app = await loadApp();
+    app.ui.editor.dispatchEvent(new Event("input"));
+    app.ui.editor.value = "select 1 as value";
+    app.ui.buttons.execute.click();
+    assert(
+        "shows loading widget",
+        app.ui.status.classList.contains("sqlime-status--loading")
+    );
+    assert(
+        "shows executing message",
+        app.ui.status.value.includes("Executing query")
+    );
+}
+
 async function testLoadDemo() {
     log("Load demo...");
     const app = await loadApp();
@@ -93,6 +109,18 @@ async function testLoadUrlInvalid() {
     assert("shows error", app.ui.status.value.includes("Failed to load"));
     assert("editor is empty", app.ui.editor.value == "");
     assert("result is empty", app.ui.result.innerText == "");
+}
+
+async function testLoadUrlShowsSchemaView() {
+    log("Load url shows schema view...");
+    const app = await loadApp();
+    localStorage.setItem("sqlime.query.demo.db", "select 1 as value");
+    app.window.location.assign("../index.html#demo.db");
+    await wait(MEDIUM_DELAY);
+    assert("shows database name", app.ui.name.value == "demo.db");
+    assert("shows schema view", app.ui.status.value == "2 tables:");
+    assert("shows table list", app.ui.result.innerText.includes("employees"));
+    assert("editor is empty", app.ui.editor.value == "");
 }
 
 async function testLoadGist() {
