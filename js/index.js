@@ -346,7 +346,7 @@ function showStarted() {
         execute(database.query);
         enableCommandBar();
     } else if (database.tables.length) {
-        showTableContent(database.tables[0]);
+        showTables();
         enableCommandBar();
     } else {
         showWelcome();
