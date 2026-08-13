@@ -20,10 +20,11 @@ class Github {
     // loadCredentials loads GitHub credentials
     // from the local storage.
     loadCredentials() {
-        this.username = localStorage.getItem("github.username");
+        this.username = getStorageItem(localStorage, "github.username");
         this.password =
-            sessionStorage.getItem("github.token") ||
-            localStorage.getItem("github.token");
+            getStorageItem(sessionStorage, "github.token") ||
+            getStorageItem(localStorage, "github.token");
+        delete this.headers.Authorization;
         if (this.password) {
             this.headers.Authorization = `Token ${this.password}`;
         }
@@ -80,6 +81,14 @@ class Github {
             .then((response) => http.toJson(response))
             .then((response) => buildGist(response));
         return promise;
+    }
+}
+
+function getStorageItem(storage, key) {
+    try {
+        return storage.getItem(key);
+    } catch (error) {
+        return null;
     }
 }
 

@@ -11,19 +11,19 @@ const ui = {
 
 ui.settings.addEventListener("submit", (event) => {
     event.preventDefault();
-    localStorage.setItem("github.username", ui.github.username.value);
+    setStorageItem(localStorage, "github.username", ui.github.username.value);
     setSensitiveItem("github.token", ui.github.token.value);
 });
 
 ui.github.username.addEventListener("change", (event) => {
-    localStorage.setItem("github.username", event.target.value);
+    setStorageItem(localStorage, "github.username", event.target.value);
 });
 
 ui.github.token.addEventListener("change", (event) => {
     setSensitiveItem("github.token", event.target.value);
 });
 
-ui.github.username.value = localStorage.getItem("github.username") || "";
+ui.github.username.value = getStorageItem(localStorage, "github.username") || "";
 ui.github.token.value = getSensitiveItem("github.token");
 ui.openai.apikey.value = "";
 localStorage.removeItem("openai.apikey");
@@ -31,22 +31,44 @@ sessionStorage.removeItem("openai.apikey");
 
 function setSensitiveItem(key, value) {
     if (value) {
-        sessionStorage.setItem(key, value);
+        setStorageItem(sessionStorage, key, value);
     } else {
-        sessionStorage.removeItem(key);
+        removeStorageItem(sessionStorage, key);
     }
-    localStorage.removeItem(key);
+    removeStorageItem(localStorage, key);
 }
 
 function getSensitiveItem(key) {
-    const sessionValue = sessionStorage.getItem(key);
+    const sessionValue = getStorageItem(sessionStorage, key);
     if (sessionValue) {
         return sessionValue;
     }
-    const legacyValue = localStorage.getItem(key) || "";
+    const legacyValue = getStorageItem(localStorage, key) || "";
     if (legacyValue) {
-        sessionStorage.setItem(key, legacyValue);
-        localStorage.removeItem(key);
+        setStorageItem(sessionStorage, key, legacyValue);
+        removeStorageItem(localStorage, key);
     }
     return legacyValue;
+}
+
+function getStorageItem(storage, key) {
+    try {
+        return storage.getItem(key);
+    } catch (error) {
+        return null;
+    }
+}
+
+function setStorageItem(storage, key, value) {
+    try {
+        storage.setItem(key, value);
+    } catch (error) {
+    }
+}
+
+function removeStorageItem(storage, key) {
+    try {
+        storage.removeItem(key);
+    } catch (error) {
+    }
 }
