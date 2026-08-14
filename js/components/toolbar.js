@@ -10,8 +10,8 @@ class Toolbar extends HTMLElement {
 
     render() {
         this.innerHTML = `
-<label title="⌃O or ⌘O" class="button button--small">
-    open file <input type="file">
+<label title="Open a .sql or SQLite database file (⌃O or ⌘O)" class="button button--small">
+    open file <input type="file" accept=".sql,.db,.sqlite,.sqlite3,application/sql,application/x-sqlite3">
 </label>
 <button title="⌃U or ⌘U" class="button button--small">open url</button>
 <a href="settings.html" class="button button--small">

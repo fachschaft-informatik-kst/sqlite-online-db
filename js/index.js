@@ -23,6 +23,7 @@ const ui = {
     name: document.querySelector("#db-name"),
     toolbar: document.querySelector("#toolbar"),
     commandbar: document.querySelector("#commandbar"),
+    queryTabs: document.querySelector("#query-tabs"),
     editor: document.querySelector("#editor"),
     status: document.querySelector("#status"),
     result: document.querySelector("#result"),
@@ -30,6 +31,7 @@ const ui = {
 
 const actions = {
     askAi: askAi,
+    downloadSql: downloadSql,
     executeCurrent: executeCurrent,
     loadDemo: loadDemo,
     save: save,
@@ -68,6 +70,8 @@ const BLOCKED_EVENTS = [
 const state = {
     blockCount: 0,
     lastRunAt: 0,
+    queryTabs: [],
+    activeQueryTabId: null,
 };
 
 function normalizeSql(sql) {
@@ -76,9 +80,6 @@ function normalizeSql(sql) {
     }
     return String(sql)
         .replace(/\r\n?/g, "\n")
-        .replace(/[\t\u00A0]+/g, " ")
-        .replace(/\s*\n\s*/g, " ")
-        .replace(/\s+/g, " ")
         .trim();
 }
 
@@ -204,6 +205,9 @@ async function startFromFile(file, contents, fileType) {
     }
     history.pushState(database.name, null, "./");
     showStarted();
+    if (fileType == "sql") {
+        renameQueryTab(state.activeQueryTabId, file.name.replace(/\.sql$/i, ""));
+    }
 }
 
 // start loads existing database or creates a new one
@@ -241,6 +245,7 @@ async function start(name, path) {
     ui.name.ready(database.name);
     ui.status.info(MESSAGES.invite);
     ui.editor.value = database.query || "";
+    initializeQueryTabs(database.query || "");
     ui.editor.focus();
 
     return true;
@@ -248,7 +253,153 @@ async function start(name, path) {
 
 // executeCurrent runs the current SQL query
 function executeCurrent() {
+    saveActiveQueryTab();
     return executeWithFeedback(ui.editor.query);
+}
+
+function initializeQueryTabs(initialQuery) {
+    const storedTabs = storage.getTabs(database.name).filter(
+        (tab) => typeof tab.id == "string" && typeof tab.name == "string" && typeof tab.sql == "string"
+    );
+    state.queryTabs = storedTabs.length
+        ? storedTabs
+        : [{ id: "query-1", name: "Query 1", sql: initialQuery }];
+    state.activeQueryTabId = state.queryTabs[0].id;
+    ui.editor.value = state.queryTabs[0].sql;
+    renderQueryTabs();
+    persistQueryTabs();
+}
+
+function activeQueryTab() {
+    return state.queryTabs.find((tab) => tab.id == state.activeQueryTabId);
+}
+
+function saveActiveQueryTab() {
+    const tab = activeQueryTab();
+    if (!tab) {
+        return;
+    }
+    tab.sql = ui.editor.value;
+    persistQueryTabs();
+}
+
+function persistQueryTabs() {
+    if (database) {
+        storage.setTabs(database.name, state.queryTabs);
+    }
+}
+
+function renderQueryTabs() {
+    ui.queryTabs.replaceChildren();
+    for (const tab of state.queryTabs) {
+        const group = document.createElement("div");
+        group.className = "sqlime-query-tab-group";
+        const isActive = tab.id == state.activeQueryTabId;
+        const button = document.createElement(isActive ? "input" : "button");
+        button.className = "sqlime-query-tab";
+        button.dataset.queryTabId = tab.id;
+        if (isActive) {
+            button.type = "text";
+            button.value = tab.name;
+            button.dataset.queryTabName = tab.id;
+            button.setAttribute("aria-label", "SQL file name");
+        } else {
+            button.type = "button";
+            button.setAttribute("role", "tab");
+            button.setAttribute("aria-selected", "false");
+            button.textContent = tab.name;
+        }
+
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "sqlime-query-tab-close";
+        close.dataset.queryTabClose = tab.id;
+        close.setAttribute("aria-label", `Close ${tab.name}`);
+        close.textContent = "x";
+        group.append(button, close);
+        ui.queryTabs.appendChild(group);
+    }
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "sqlime-query-tab-add";
+    add.dataset.queryTabNew = "";
+    add.setAttribute("aria-label", "New SQL query page");
+    add.textContent = "+";
+    ui.queryTabs.appendChild(add);
+}
+
+function activateQueryTab(id) {
+    saveActiveQueryTab();
+    const tab = state.queryTabs.find((item) => item.id == id);
+    if (!tab) {
+        return;
+    }
+    state.activeQueryTabId = tab.id;
+    ui.editor.value = tab.sql;
+    renderQueryTabs();
+    ui.editor.focus();
+}
+
+function addQueryTab() {
+    saveActiveQueryTab();
+    const number = state.queryTabs.length + 1;
+    const tab = { id: `query-${Date.now()}`, name: `Query ${number}`, sql: "" };
+    state.queryTabs.push(tab);
+    state.activeQueryTabId = tab.id;
+    ui.editor.value = "";
+    renderQueryTabs();
+    persistQueryTabs();
+    ui.editor.focus();
+}
+
+function renameQueryTab(id, name) {
+    const tab = state.queryTabs.find((item) => item.id == id);
+    const normalizedName = String(name || "").trim();
+    if (!tab || !normalizedName) {
+        return;
+    }
+    tab.name = normalizedName.replace(/\.sql$/i, "");
+    renderQueryTabs();
+    persistQueryTabs();
+}
+
+function closeQueryTab(id) {
+    if (state.queryTabs.length == 1) {
+        const tab = activeQueryTab();
+        tab.sql = "";
+        ui.editor.value = "";
+        persistQueryTabs();
+        return;
+    }
+    const index = state.queryTabs.findIndex((tab) => tab.id == id);
+    if (index < 0) {
+        return;
+    }
+    state.queryTabs.splice(index, 1);
+    if (state.activeQueryTabId == id) {
+        state.activeQueryTabId = state.queryTabs[Math.max(0, index - 1)].id;
+        ui.editor.value = activeQueryTab().sql;
+    }
+    renderQueryTabs();
+    persistQueryTabs();
+}
+
+function downloadSql() {
+    saveActiveQueryTab();
+    const tab = activeQueryTab();
+    const filename = `${(tab ? tab.name : "query").replace(/[^a-z0-9_-]/gi, "-").toLowerCase()}.sql`;
+    const url = URL.createObjectURL(new Blob([ui.editor.value], { type: "text/sql;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+        link.remove();
+        URL.revokeObjectURL(url);
+    }, 0);
+    return Promise.resolve();
 }
 
 // execute runs SQL query on the database
@@ -501,7 +652,7 @@ ui.name.addEventListener("change", (event) => {
 ui.toolbar.addEventListener("open-file", (event) => {
     const file = event.detail;
     const reader = new FileReader();
-    const fileType = file.name.endsWith(".sql") ? "sql" : "binary";
+    const fileType = file.name.toLowerCase().endsWith(".sql") ? "sql" : "binary";
     reader.onload = function () {
         event.target.value = "";
         startFromFile(file, reader.result, fileType);
@@ -536,6 +687,33 @@ ui.editor.addEventListener("execute", (event) => {
 // SQL editor 'started typing' event
 ui.editor.addEventListener("start", (event) => {
     enableCommandBar();
+});
+
+ui.editor.addEventListener("input", () => {
+    saveActiveQueryTab();
+});
+
+ui.queryTabs.addEventListener("click", (event) => {
+    const close = event.target.closest("[data-query-tab-close]");
+    if (close) {
+        closeQueryTab(close.dataset.queryTabClose);
+        return;
+    }
+    if (event.target.closest("[data-query-tab-new]")) {
+        addQueryTab();
+        return;
+    }
+    const tab = event.target.closest("[data-query-tab-id]");
+    if (tab) {
+        activateQueryTab(tab.dataset.queryTabId);
+    }
+});
+
+ui.queryTabs.addEventListener("change", (event) => {
+    const input = event.target.closest("[data-query-tab-name]");
+    if (input) {
+        renameQueryTab(input.dataset.queryTabName, input.value);
+    }
 });
 
 // Handle user actions

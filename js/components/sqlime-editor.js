@@ -51,28 +51,35 @@ class SqlimeEditor extends HTMLElement {
     }
 
     render() {
-        this.contentEditable = "true";
-        this.spellcheck = false;
+        this.highlight = document.createElement("pre");
+        this.highlight.className = "sqlime-editor__highlight";
+        this.highlight.setAttribute("aria-hidden", "true");
+        this.input = document.createElement("textarea");
+        this.input.className = "sqlime-editor__input";
+        this.input.placeholder = "select * from ...";
+        this.input.setAttribute("aria-label", "SQL query editor");
+        this.input.spellcheck = false;
+        this.append(this.highlight, this.input);
+        this.updateHighlight();
     }
 
     listen() {
         // shortcuts
         this.addEventListener("keydown", this.onKeydown.bind(this));
-        // always paste as plain text
-        this.addEventListener("paste", this.onPaste.bind(this));
         // first input event
         const onInput = (event) => {
             this.dispatchEvent(new Event("start"));
             this.removeEventListener("input", onInput);
         };
         this.addEventListener("input", onInput);
+        this.input.addEventListener("input", () => this.updateHighlight());
+        this.input.addEventListener("scroll", () => this.syncScroll());
     }
 
     // focus sets cursor at the end of the editor
     focus() {
-        super.focus();
-        document.execCommand("selectAll", false, null);
-        document.getSelection().collapseToEnd();
+        this.input.focus();
+        this.input.setSelectionRange(this.input.value.length, this.input.value.length);
     }
 
     // clear clears editor contents
@@ -86,32 +93,76 @@ class SqlimeEditor extends HTMLElement {
         if (handleIndent(this, event)) return;
     }
 
-    onPaste(event) {
-        event.preventDefault();
-        // get text representation of clipboard
-        const text = (event.originalEvent || event).clipboardData.getData(
-            "text/plain"
-        );
-        // insert text manually
-        document.execCommand("insertHTML", false, text);
-    }
-
     get value() {
-        return this.textContent || "";
+        return this.input.value;
     }
     set value(newValue) {
-        this.textContent = newValue || "";
+        this.input.value = newValue || "";
+        this.updateHighlight();
     }
 
     get query() {
-        const selectedQuery = window.getSelection().toString().trim();
-        const text = selectedQuery || this.value;
-        return String(text)
-            .replace(/\r\n?/g, "\n")
-            .replace(/\s*\n\s*/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
+        const selectedQuery = this.input.value.slice(
+            this.input.selectionStart,
+            this.input.selectionEnd
+        );
+        return (selectedQuery || this.value).replace(/\r\n?/g, "\n").trim();
     }
+
+    updateHighlight() {
+        this.highlight.innerHTML = highlightSql(this.input.value) || " ";
+        this.syncScroll();
+    }
+
+    syncScroll() {
+        this.highlight.scrollTop = this.input.scrollTop;
+        this.highlight.scrollLeft = this.input.scrollLeft;
+    }
+}
+
+function highlightSql(sql) {
+    let html = "";
+    let index = 0;
+    while (index < sql.length) {
+        if (sql.startsWith("--", index)) {
+            const end = sql.indexOf("\n", index);
+            const comment = sql.slice(index, end < 0 ? sql.length : end);
+            html += `<span class="sqlime-editor__comment">${escapeHtml(comment)}</span>`;
+            index += comment.length;
+        } else if (sql[index] == "'" || sql[index] == '"') {
+            const quote = sql[index];
+            let end = index + 1;
+            while (end < sql.length) {
+                if (sql[end] == quote && sql[end + 1] == quote) {
+                    end += 2;
+                } else if (sql[end++] == quote) {
+                    break;
+                }
+            }
+            html += `<span class="sqlime-editor__string">${escapeHtml(sql.slice(index, end))}</span>`;
+            index = end;
+        } else {
+            const nextToken = sql.slice(index).search(/--|['"]/);
+            const end = nextToken < 0 ? sql.length : index + nextToken;
+            html += highlightSqlCode(sql.slice(index, end));
+            index = end;
+        }
+    }
+    return html;
+}
+
+function highlightSqlCode(code) {
+    return escapeHtml(code).replace(
+        /\b(SELECT|FROM|WHERE|INNER|JOIN|LEFT|RIGHT|FULL|ON|GROUP|BY|ORDER|LIMIT|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|TABLE|ALTER|DROP|PRIMARY|KEY|FOREIGN|REFERENCES|UNIQUE|NOT|NULL|AND|OR|AS|COUNT|SUM|AVG|MAX|MIN)\b|\b\d+(?:\.\d+)?\b/gi,
+        (token) => {
+            const kind = /^\d/.test(token) ? "number" : "keyword";
+            return `<span class="sqlime-editor__${kind}">${token}</span>`;
+        }
+    );
+}
+
+function escapeHtml(text) {
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // handleIndent indents text with Tab
@@ -120,7 +171,11 @@ function handleIndent(elem, event) {
         return false;
     }
     event.preventDefault();
-    document.execCommand("insertHTML", false, " ".repeat(TAB_WIDTH));
+    const input = elem.input;
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    input.setRangeText(" ".repeat(TAB_WIDTH), start, end, "end");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
     return true;
 }
 
@@ -132,8 +187,7 @@ function handleAutocomplete(elem, event) {
     if (!isTab) {
         return false;
     }
-    const selection = window.getSelection();
-    const cursor = getCursorPosition(selection, elem.value.length);
+    const cursor = elem.input.selectionStart;
     const token = getCurrentToken(elem.value, cursor);
     if (!token) {
         return false;
@@ -191,28 +245,10 @@ function replaceToken(text, token, completion, cursor) {
     return { text: newText, newCursor };
 }
 
-function getCursorPosition(selection, fallback) {
-    if (selection && selection.rangeCount) {
-        const range = selection.getRangeAt(0);
-        if (Number.isFinite(range.startOffset)) {
-            return range.startOffset;
-        }
-    }
-    return fallback;
-}
-
 function setCursorPosition(elem, position) {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    const textNode = elem.firstChild || elem.ownerDocument.createTextNode("");
-    if (!elem.firstChild) {
-        elem.appendChild(textNode);
-    }
-    const offset = Math.min(position, textNode.textContent.length);
-    range.setStart(textNode, offset);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    const offset = Math.min(position, elem.value.length);
+    elem.input.focus();
+    elem.input.setSelectionRange(offset, offset);
 }
 
 // handleExecute triggers 'execute' event by Ctrl/Cmd+Enter
