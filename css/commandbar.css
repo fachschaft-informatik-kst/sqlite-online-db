@@ -10,11 +10,12 @@
     height: 2rem;
     padding: 0 0.5rem;
     border: 1px solid var(--sqlime-blue);
-    border-radius: 0.125rem;
+    border-radius: var(--sqlime-radius-small);
     background: transparent;
     color: var(--sqlime-blue);
     line-height: 1rem;
     font-size: 1rem;
+    transition: background-color var(--sqlime-transition), color var(--sqlime-transition);
 }
 
 .sqlime-commandbar > button:first-child {

@@ -2,13 +2,16 @@ body {
     margin: 0;
     padding: 0;
     background: var(--sqlime-light-gray);
+    color: var(--sqlime-text);
     font-family: var(--sqlime-sans);
+    -webkit-font-smoothing: antialiased;
 }
 
 .grid {
     display: flex;
     flex-direction: column;
     max-width: 80rem;
+    margin: 0 auto;
 }
 
 .hidden {
@@ -23,9 +26,15 @@ body {
 
 @media only screen and (min-width: 40rem) {
     body {
-        padding: 1rem 1.5rem;
+        padding: 1.5rem 2rem;
     }
     .hidden-desktop {
         display: none !important;
+    }
+}
+
+@media only screen and (min-width: 90rem) {
+    body {
+        padding: 2.5rem 2rem;
     }
 }

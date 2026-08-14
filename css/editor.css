@@ -4,6 +4,16 @@
     padding: 0 0 0.5rem 0;
 }
 
+@media only screen and (min-width: 40rem) {
+    .sqlime-editor-section {
+        border: 1px solid var(--sqlime-gray);
+        border-radius: var(--sqlime-radius);
+        background: var(--sqlime-white);
+        box-shadow: var(--sqlime-shadow);
+        overflow: hidden;
+    }
+}
+
 .sqlime-query-tabs {
     display: flex;
     align-items: end;
@@ -11,7 +21,14 @@
     overflow-x: auto;
     border-bottom: 1px solid var(--sqlime-gray);
     background: var(--sqlime-light-gray);
-    padding: 0.25rem 0.5rem 0;
+    /* padding matches the textbox's own horizontal padding at each breakpoint */
+    padding: 0.5rem 1rem 0;
+}
+
+@media only screen and (min-width: 40rem) {
+    .sqlime-query-tabs {
+        padding: 0.5rem 0.75rem 0;
+    }
 }
 
 .sqlime-query-tab-group,
@@ -19,11 +36,12 @@
 .sqlime-query-tab-add,
 .sqlime-query-tab-close {
     border: 0;
-    border-radius: 0;
+    border-radius: var(--sqlime-radius-small) var(--sqlime-radius-small) 0 0;
     background: transparent;
     color: var(--sqlime-blue);
     font-family: var(--sqlime-sans);
-    font-size: 0.875rem;
+    font-size: 1rem;
+    transition: background-color var(--sqlime-transition);
 }
 
 .sqlime-query-tab {
@@ -41,19 +59,20 @@ input.sqlime-query-tab {
     border: 1px solid var(--sqlime-gray);
     border-bottom-color: var(--sqlime-white);
     background: var(--sqlime-white);
-    color: var(--sqlime-dark-gray);
+    color: var(--sqlime-text);
 }
 
 .sqlime-query-tab-group {
     display: flex;
     flex: 0 0 10rem;
+    border-radius: var(--sqlime-radius-small) var(--sqlime-radius-small) 0 0;
 }
 
 .sqlime-query-tab[aria-selected="true"] {
     border: 1px solid var(--sqlime-gray);
     border-bottom-color: var(--sqlime-white);
     background: var(--sqlime-white);
-    color: var(--sqlime-dark-gray);
+    color: var(--sqlime-text);
 }
 
 .sqlime-query-tab-close,
@@ -92,7 +111,7 @@ input.sqlime-query-tab {
     box-sizing: border-box;
     width: 100%;
     font-family: var(--sqlime-monospace);
-    font-size: 1rem;
+    font-size: 1.0625rem;
     line-height: 1.6;
     tab-size: 2;
 }
@@ -105,7 +124,6 @@ input.sqlime-query-tab {
     min-height: 16rem;
     margin: 0;
     padding: 0.75rem 1rem;
-    border-top: 1px solid var(--sqlime-gray);
     white-space: pre-wrap;
     overflow-wrap: break-word;
     pointer-events: none;
@@ -117,7 +135,6 @@ input.sqlime-query-tab {
     resize: vertical;
     min-height: 16rem;
     border: 0;
-    border-top: 1px solid transparent;
     border-radius: 0;
     background: transparent;
     padding: 0.75rem 1rem;
@@ -157,16 +174,7 @@ input.sqlime-query-tab {
     .sqlime-editor__highlight,
     .sqlime-editor__input {
         min-height: 24rem;
-        border-left: 1px solid var(--sqlime-gray);
-        border-right: 1px solid var(--sqlime-gray);
         padding: 0.75rem 0.75rem 2.75rem 0.75rem;
-    }
-    .sqlime-editor__input {
-        border-color: transparent;
-        border-bottom: 1px solid transparent;
-    }
-    .sqlime-editor__highlight {
-        border-bottom: 1px solid var(--sqlime-gray);
     }
     .sqlime-editor::after {
         position: absolute;

@@ -10,8 +10,8 @@
 }
 
 .toolbar .button--small {
-    height: 1.5rem;
-    line-height: 1.25rem;
+    height: 1.75rem;
+    line-height: 1.5rem;
 }
 
 .toolbar .button-help {
@@ -27,7 +27,7 @@
 .toolbar a,
 .toolbar label {
     display: inline-block;
-    height: 1.5rem;
+    height: 1.75rem;
     text-decoration: none;
 }
 

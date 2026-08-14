@@ -11,19 +11,26 @@
 .sqlime-result table {
     width: 100%;
     border: 1px solid var(--sqlime-gray);
-    border-collapse: collapse;
+    border-radius: var(--sqlime-radius-small);
+    border-collapse: separate;
+    border-spacing: 0;
     background: var(--sqlime-white);
     font-family: var(--sqlime-monospace);
+    box-shadow: var(--sqlime-shadow);
 }
 
 .sqlime-result table th {
     border-bottom: 1px solid var(--sqlime-gray);
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem 0.75rem;
     text-align: left;
 }
 
 .sqlime-result table td {
-    padding: 0.25rem 0.5rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.sqlime-result table tr:not(:last-child) td {
+    border-bottom: 1px solid var(--sqlime-light-gray);
 }
 
 .sqlime-result pre {

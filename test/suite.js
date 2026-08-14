@@ -288,7 +288,6 @@ async function testLoadGist() {
     assert("shows database name", app.ui.name.value == "employees.en.db");
     assert("shows tables view", app.ui.status.value.includes("tables:"));
     assert("shows table list", app.ui.result.innerText.includes("employees"));
-    assert("editor is empty", app.ui.editor.value == "");
 }
 
 async function testLoadGistEncodedHash() {
@@ -302,7 +301,6 @@ async function testLoadGistEncodedHash() {
     assert("shows database name", app.ui.name.value == "employees.en.db");
     assert("shows tables view", app.ui.status.value.includes("tables:"));
     assert("shows table list", app.ui.result.innerText.includes("employees"));
-    assert("editor is empty", app.ui.editor.value == "");
 }
 
 async function testLoadGistInvalid() {

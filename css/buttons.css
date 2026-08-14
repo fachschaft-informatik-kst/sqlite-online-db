@@ -1,10 +1,11 @@
 .button {
     border: 1px solid var(--sqlime-blue);
-    border-radius: 0.25rem;
+    border-radius: var(--sqlime-radius-small);
     background: transparent;
     padding: 0.5rem;
     color: var(--sqlime-blue);
     cursor: pointer;
+    transition: background-color var(--sqlime-transition), color var(--sqlime-transition);
 }
 .button:hover {
     background: var(--sqlime-blue);
@@ -21,7 +22,7 @@
 }
 
 .button--small {
-    border-radius: 0.125rem;
-    padding: 0.125rem 0.5rem;
-    font-size: 80%;
+    border-radius: var(--sqlime-radius-small);
+    padding: 0.25rem 0.625rem;
+    font-size: 90%;
 }
