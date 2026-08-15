@@ -300,14 +300,14 @@ function renderQueryTabs() {
         button.dataset.queryTabId = tab.id;
         if (isActive) {
             button.type = "text";
-            button.value = tab.name;
+            button.value = sqlFileName(tab.name);
             button.dataset.queryTabName = tab.id;
             button.setAttribute("aria-label", "SQL file name");
         } else {
             button.type = "button";
             button.setAttribute("role", "tab");
             button.setAttribute("aria-selected", "false");
-            button.textContent = tab.name;
+            button.textContent = sqlFileName(tab.name);
         }
 
         const close = document.createElement("button");
@@ -361,6 +361,10 @@ function renameQueryTab(id, name) {
     tab.name = normalizedName.replace(/\.sql$/i, "");
     renderQueryTabs();
     persistQueryTabs();
+}
+
+function sqlFileName(name) {
+    return `${name}.sql`;
 }
 
 function closeQueryTab(id) {
