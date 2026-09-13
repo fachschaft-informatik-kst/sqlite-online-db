@@ -1,5 +1,6 @@
 const ui = {
     settings: document.querySelector("#settings"),
+    status: document.querySelector("#settings-status"),
     github: {
         username: document.querySelector("#github-username"),
         token: document.querySelector("#github-token"),
@@ -11,17 +12,17 @@ const ui = {
 
 ui.settings.addEventListener("submit", (event) => {
     event.preventDefault();
-    setStorageItem(localStorage, "github.username", ui.github.username.value);
-    setSensitiveItem("github.token", ui.github.token.value);
+    setStorageItem(localStorage, "github.username", ui.github.username.value.trim());
+    setSensitiveItem("github.token", ui.github.token.value.trim());
+    ui.status.textContent = "Settings saved.";
 });
 
-ui.github.username.addEventListener("change", (event) => {
-    setStorageItem(localStorage, "github.username", event.target.value);
-});
+function markUnsaved() {
+    ui.status.textContent = "Unsaved changes";
+}
 
-ui.github.token.addEventListener("change", (event) => {
-    setSensitiveItem("github.token", event.target.value);
-});
+ui.github.username.addEventListener("input", markUnsaved);
+ui.github.token.addEventListener("input", markUnsaved);
 
 ui.github.username.value = getStorageItem(localStorage, "github.username") || "";
 ui.github.token.value = getSensitiveItem("github.token");
