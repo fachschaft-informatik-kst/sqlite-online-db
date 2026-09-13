@@ -2,7 +2,7 @@
 
 // Uses Github Gist API for users with credentials.
 
-import github from "./cloud/github.js";
+import github from "./cloud/github.js?v=20260913-5";
 
 const PROVIDERS = {
     [github.prefix]: github,
@@ -42,7 +42,7 @@ class Gister {
         this._provider = github;
     }
 
-    // loadCredentials loads credentials from the local storage.
+    // loadCredentials loads credentials from browser storage.
     loadCredentials() {
         this.provider.loadCredentials();
     }
