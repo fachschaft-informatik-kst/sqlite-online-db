@@ -265,12 +265,21 @@ function ensureReloadButton() {
     return button;
 }
 
-function updateReloadButton(path = null) {
+function updateReloadButton(path) {
     const button = ensureReloadButton();
     if (!button) {
         return;
     }
-    const key = path && path.type == "id" ? path.value : currentGistKey();
+
+    let key = "";
+    if (path === null) {
+        key = "";
+    } else if (path && path.type == "id") {
+        key = path.value;
+    } else {
+        key = currentGistKey();
+    }
+
     const isGist = typeof key == "string" && key.startsWith("gist:");
     button.hidden = !isGist;
     button.style.display = isGist ? "" : "none";
