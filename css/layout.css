@@ -10,7 +10,8 @@ body {
 .grid {
     display: flex;
     flex-direction: column;
-    max-width: 80rem;
+    width: 100%;
+    max-width: 96rem;
     margin: 0 auto;
 }
 
