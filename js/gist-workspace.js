@@ -202,16 +202,18 @@ manager.init = async function (gister, name, path) {
 
 manager.save = async function (gister, database, query) {
     saving.add(database);
+    let savedDatabase;
     try {
-        const savedDatabase = await originalSave(gister, database, query);
-        if (savedDatabase && isGistDatabase(savedDatabase)) {
-            await persistSnapshot(savedDatabase);
-            updateReloadButton(savedDatabase.path);
-        }
-        return savedDatabase;
+        savedDatabase = await originalSave(gister, database, query);
     } finally {
         saving.delete(database);
     }
+
+    if (savedDatabase && isGistDatabase(savedDatabase)) {
+        await persistSnapshot(savedDatabase);
+        updateReloadButton(savedDatabase.path);
+    }
+    return savedDatabase;
 };
 
 SQLite.prototype.execute = function (sql, updateQuery = true) {
@@ -271,6 +273,7 @@ function updateReloadButton(path = null) {
     const key = path && path.type == "id" ? path.value : currentGistKey();
     const isGist = typeof key == "string" && key.startsWith("gist:");
     button.hidden = !isGist;
+    button.style.display = isGist ? "" : "none";
     button.dataset.workspaceKey = isGist ? key : "";
 }
 
