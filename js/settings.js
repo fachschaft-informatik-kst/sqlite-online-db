@@ -5,9 +5,6 @@ const ui = {
         username: document.querySelector("#github-username"),
         token: document.querySelector("#github-token"),
     },
-    openai: {
-        apikey: document.querySelector("#openai-apikey"),
-    },
 };
 
 ui.settings.addEventListener("submit", (event) => {
@@ -26,9 +23,6 @@ ui.github.token.addEventListener("input", markUnsaved);
 
 ui.github.username.value = getStorageItem(localStorage, "github.username") || "";
 ui.github.token.value = getSensitiveItem("github.token");
-ui.openai.apikey.value = "";
-localStorage.removeItem("openai.apikey");
-sessionStorage.removeItem("openai.apikey");
 
 function setSensitiveItem(key, value) {
     if (value) {
