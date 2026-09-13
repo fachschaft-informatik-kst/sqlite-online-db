@@ -1,11 +1,18 @@
 import { OpenAI } from "./cloud/openai.js?v=20260913-2";
 
-function getSavedApiKey() {
+function getStorageItem(storage, key) {
     try {
-        return (sessionStorage.getItem("openai.apikey") || "").trim();
+        return storage.getItem(key) || "";
     } catch (error) {
         return "";
     }
+}
+
+function getSavedApiKey() {
+    return (
+        getStorageItem(localStorage, "openai.apikey") ||
+        getStorageItem(sessionStorage, "openai.apikey")
+    ).trim();
 }
 
 async function handleAskAi(event) {
@@ -14,8 +21,6 @@ async function handleAskAi(event) {
         return;
     }
 
-    // Prevent the legacy askAi handler in index.js from running and prompting
-    // for a key. The key is configured explicitly in Settings instead.
     event.preventDefault();
     event.stopImmediatePropagation();
 
@@ -51,7 +56,4 @@ async function handleAskAi(event) {
     }
 }
 
-// Capture the click before ActionController's bubbling listener. This makes
-// the Settings-based key flow authoritative even while the legacy function
-// remains in index.js.
 document.addEventListener("click", handleAskAi, true);
