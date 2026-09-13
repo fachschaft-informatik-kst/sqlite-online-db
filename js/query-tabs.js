@@ -36,8 +36,7 @@ function migrateDefaultNames() {
 }
 
 function configureActiveNameInput() {
-    migrateDefaultNames();
-
+    const migrated = migrateDefaultNames();
     const tab = activeTab();
     const input = queryTabs.querySelector("input[data-query-tab-name]");
     if (!tab || !input) {
@@ -52,6 +51,12 @@ function configureActiveNameInput() {
     input.title = fileName;
     input.autocomplete = "off";
     input.spellcheck = false;
+
+    // Let index.js persist migrated defaults through its existing rename handler.
+    if (migrated) {
+        input.value = fileName;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
 }
 
 function focusActiveNameInput() {
