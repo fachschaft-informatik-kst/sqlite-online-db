@@ -27,7 +27,7 @@
             <form id="settings">
                 <fieldset>
                     <legend>GitHub credentials (to enable sharing)</legend>
-                    <label for="github-username">Username</label>
+                    <label for="github-username">Username (optional)</label>
                     <input id="github-username" type="text" autocomplete="username">
                     <label for="github-token">API token</label>
                     <input id="github-token" type="password" autocomplete="off">
@@ -35,6 +35,7 @@
                         This is <strong>not</strong> your GitHub password.
                         Create an API token with a 'gist' scope in the
                         <a href="https://github.com/settings/tokens" target="_blank">GitHub settings</a>.
+                        The token alone is enough for sharing. The username is optional and can help Sqlime update an existing gist instead of creating a new one.
                         The token is kept only for the current browser session.
                     </p>
                 </fieldset>
@@ -57,7 +58,7 @@
             <p><a href="javascript:history.go(-1)">← back</a></p>
         </article>
     </main>
-    <script type="module" src="js/settings.js?v=20260913-2"></script>
+    <script type="module" src="js/settings.js?v=20260913-5"></script>
 </body>
 
 </html>
