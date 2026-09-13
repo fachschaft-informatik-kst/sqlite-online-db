@@ -31,7 +31,7 @@ class Github {
     }
 
     // hasCredentials returns `true` if the user has provided
-    // GitHub username and password, `false` otherwise.
+    // API credentials, `false` otherwise.
     hasCredentials() {
         return this.username && this.password;
     }
@@ -96,6 +96,7 @@ function getStorageItem(storage, key) {
 function buildData(name, schema, query) {
     return {
         description: name,
+        public: true,
         files: {
             "schema.sql": {
                 content: schema || "--",
