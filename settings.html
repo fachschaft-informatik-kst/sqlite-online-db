@@ -23,7 +23,7 @@
     <main>
         <article>
             <p>All settings are optional, you can use Sqlime without them.</p>
-            <p><strong>Changes to GitHub credentials are only stored after clicking “Save settings”.</strong></p>
+            <p><strong>Changes are only stored after clicking “Save settings”.</strong></p>
             <form id="settings">
                 <fieldset>
                     <legend>GitHub credentials (to enable sharing)</legend>
@@ -36,6 +36,17 @@
                         Create an API token with a 'gist' scope in the
                         <a href="https://github.com/settings/tokens" target="_blank">GitHub settings</a>.
                         The token is kept only for the current browser session.
+                    </p>
+                </fieldset>
+                <br>
+                <fieldset>
+                    <legend>OpenAI credentials (to enable 'Ask AI')</legend>
+                    <label for="openai-apikey">API key</label>
+                    <input id="openai-apikey" type="password" autocomplete="off">
+                    <p>
+                        Create an API key in the
+                        <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI account</a>.
+                        The key is kept only for the current browser session and is only stored after clicking “Save settings”.
                     </p>
                 </fieldset>
                 <p>
