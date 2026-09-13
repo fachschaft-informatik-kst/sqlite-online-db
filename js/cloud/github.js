@@ -17,28 +17,30 @@ class Github {
         this.headers = Object.assign({}, HEADERS);
     }
 
-    // loadCredentials loads GitHub credentials
-    // from the local storage.
+    // loadCredentials loads GitHub credentials from browser storage.
+    // The token is sufficient for GitHub API authentication; username is
+    // optional and is only used to decide whether an existing gist can be
+    // updated in place.
     loadCredentials() {
-        this.username = getStorageItem(localStorage, "github.username");
+        this.username = getStorageItem(localStorage, "github.username") || "";
         this.password =
             getStorageItem(sessionStorage, "github.token") ||
-            getStorageItem(localStorage, "github.token");
+            getStorageItem(localStorage, "github.token") ||
+            "";
         delete this.headers.Authorization;
         if (this.password) {
-            this.headers.Authorization = `Token ${this.password}`;
+            this.headers.Authorization = `Bearer ${this.password}`;
         }
     }
 
-    // hasCredentials returns `true` if the user has provided
-    // API credentials, `false` otherwise.
+    // hasCredentials returns true when a GitHub API token is available.
     hasCredentials() {
-        return this.username && this.password;
+        return Boolean(this.password);
     }
 
-    // getUrl returns a gist url by its id.
+    // getUrl returns a gist URL by its id. The username is not required.
     getUrl(id) {
-        return `https://gist.github.com/${this.username}/${id}`;
+        return `https://gist.github.com/${id}`;
     }
 
     // get returns a gist by its id.
@@ -66,7 +68,15 @@ class Github {
             body: JSON.stringify(data),
         })
             .then((response) => http.toJson(response))
-            .then((response) => buildGist(response));
+            .then(async (response) => {
+                const gist = await buildGist(response);
+                // Once a gist has been successfully created we know which
+                // GitHub account owns the token for the rest of this session.
+                if (!this.username && gist.owner) {
+                    this.username = gist.owner;
+                }
+                return gist;
+            });
         return promise;
     }
 
@@ -79,7 +89,13 @@ class Github {
             body: JSON.stringify(data),
         })
             .then((response) => http.toJson(response))
-            .then((response) => buildGist(response));
+            .then(async (response) => {
+                const gist = await buildGist(response);
+                if (!this.username && gist.owner) {
+                    this.username = gist.owner;
+                }
+                return gist;
+            });
         return promise;
     }
 }
