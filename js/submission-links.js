@@ -55,6 +55,18 @@ async function sha256(buffer) {
     ).join("");
 }
 
+async function gitBlobSha1(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const prefix = new TextEncoder().encode(`blob ${bytes.length}\0`);
+    const combined = new Uint8Array(prefix.length + bytes.length);
+    combined.set(prefix);
+    combined.set(bytes, prefix.length);
+    const digest = await crypto.subtle.digest("SHA-1", combined);
+    return Array.from(new Uint8Array(digest), (byte) =>
+        byte.toString(16).padStart(2, "0")
+    ).join("");
+}
+
 async function identifyDatabaseFile(file) {
     if (!file || !/\.(db|sqlite|sqlite3)$/i.test(file.name || "")) {
         currentDatabaseHash = "";
@@ -65,9 +77,21 @@ async function identifyDatabaseFile(file) {
     const buffer = await file.arrayBuffer();
     const hash = await sha256(buffer);
     const registry = await loadRegistry();
-    currentDatabaseHash = hash;
-    currentDatabaseEntry = registry[hash] || null;
-    return currentDatabaseEntry;
+    let registryKey = hash;
+    let entry = registry[registryKey] || null;
+
+    // Existing repository databases can also be registered by their Git blob
+    // SHA-1. This makes it possible to test the feature without duplicating
+    // binary database files in the repository.
+    if (!entry) {
+        const gitHash = await gitBlobSha1(buffer);
+        registryKey = `git:${gitHash}`;
+        entry = registry[registryKey] || null;
+    }
+
+    currentDatabaseHash = entry ? registryKey : hash;
+    currentDatabaseEntry = entry;
+    return entry;
 }
 
 function bytesToBase64Url(bytes) {
