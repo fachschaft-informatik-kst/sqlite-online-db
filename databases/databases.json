@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "databases": {
+    "f412b0c34a93a84413638a320700a6cc45dc9b2633a1ec8e43900ac604a4f959": {
+      "name": "bibliothek.db",
+      "title": "Bibliothek",
+      "source": "databases/bibliothek.sql.gz",
+      "format": "sql-gzip"
+    }
+  }
+}
