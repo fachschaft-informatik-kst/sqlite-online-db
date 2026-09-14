@@ -1,6 +1,6 @@
 // Link-based Moodle submissions for registered classroom databases.
 //
-// A submission URL contains only the SHA-256 identifier of a known base
+// A submission URL contains only the content identifier of a known base
 // database plus the SQL query tabs. The database itself is loaded from the
 // local registry, so no GitHub token, account, or persistent browser storage
 // is required to open a submission (including in Private Browsing).
@@ -92,6 +92,32 @@ async function identifyDatabaseFile(file) {
     currentDatabaseHash = entry ? registryKey : hash;
     currentDatabaseEntry = entry;
     return entry;
+}
+
+async function identifyDatabasePath(path) {
+    if (!path || !["local", "remote"].includes(path.type) || typeof path.value != "string") {
+        currentDatabaseHash = "";
+        currentDatabaseEntry = null;
+        return null;
+    }
+
+    const targetUrl = new URL(path.value, document.baseURI).href;
+    const registry = await loadRegistry();
+    for (const [key, entry] of Object.entries(registry)) {
+        if (!entry || !entry.source) {
+            continue;
+        }
+        const sourceUrl = new URL(`../${entry.source}`, import.meta.url).href;
+        if (sourceUrl == targetUrl) {
+            currentDatabaseHash = key;
+            currentDatabaseEntry = entry;
+            return entry;
+        }
+    }
+
+    currentDatabaseHash = "";
+    currentDatabaseEntry = null;
+    return null;
 }
 
 function bytesToBase64Url(bytes) {
@@ -243,6 +269,14 @@ function scheduleSubmissionUiRestore(payload, entry) {
 
 manager.init = async function (gister, name, path) {
     if (!isSubmissionPath(path)) {
+        if (path && ["local", "remote"].includes(path.type)) {
+            identificationPromise = identifyDatabasePath(path).catch(() => null);
+            await identificationPromise;
+        } else if (!path || path.type != "binary") {
+            currentDatabaseHash = "";
+            currentDatabaseEntry = null;
+            identificationPromise = Promise.resolve(null);
+        }
         return originalManagerInit(gister, name, path);
     }
 
@@ -422,19 +456,19 @@ async function createSubmissionLink(button) {
     }
 }
 
-// Hash local .db uploads in parallel with the existing database loader.
-document.addEventListener(
-    "open-file",
-    (event) => {
+// `open-file` is intentionally dispatched as a non-bubbling custom event by
+// the toolbar component, so listen on the toolbar element itself.
+const toolbar = document.querySelector("#toolbar");
+if (toolbar) {
+    toolbar.addEventListener("open-file", (event) => {
         identificationPromise = identifyDatabaseFile(event.detail).catch((error) => {
             console.warn("Could not identify classroom database", error);
             currentDatabaseHash = "";
             currentDatabaseEntry = null;
             return null;
         });
-    },
-    true
-);
+    });
+}
 
 document.addEventListener(
     "click",
