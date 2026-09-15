@@ -38,14 +38,18 @@ class Github {
         return Boolean(this.password);
     }
 
-    // getUrl returns a gist URL by its id. The username is not required.
+    // getUrl returns a gist URL by its id. A pinned revision is deliberately
+    // omitted here so the normal GitHub Gist page remains the human-facing link.
     getUrl(id) {
-        return `https://gist.github.com/${id}`;
+        const gistId = String(id || "").split("@")[0];
+        return `https://gist.github.com/${gistId}`;
     }
 
-    // get returns a gist by its id.
-    get(id) {
-        const promise = fetch(`${this.url}/${id}`, {
+    // get returns a gist by its id. When revision is provided, GitHub returns
+    // exactly that immutable Gist revision.
+    get(id, revision = "") {
+        const suffix = revision ? `/${revision}` : "";
+        const promise = fetch(`${this.url}/${id}${suffix}`, {
             method: "get",
             headers: this.headers,
         })
@@ -80,10 +84,12 @@ class Github {
         return promise;
     }
 
-    // update updates an existing gist.
+    // update updates an existing gist. Database objects may carry a pinned
+    // revision in their id (id@sha); updates always target the base Gist id.
     update(id, name, schema, query) {
+        const gistId = String(id || "").split("@")[0];
         const data = buildData(name, schema, query);
-        const promise = fetch(`${this.url}/${id}`, {
+        const promise = fetch(`${this.url}/${gistId}`, {
             method: "post",
             headers: this.headers,
             body: JSON.stringify(data),
@@ -143,12 +149,32 @@ async function fileContent(file) {
     return await response.text();
 }
 
+// gistRevision extracts the immutable revision SHA returned by GitHub. The
+// history entry is preferred; raw_url is a fallback for API responses where
+// history is unexpectedly absent.
+function gistRevision(response) {
+    const historyRevision = response.history?.[0]?.version;
+    if (historyRevision) {
+        return historyRevision;
+    }
+
+    for (const file of Object.values(response.files || {})) {
+        const rawUrl = file?.raw_url || "";
+        const match = rawUrl.match(/\/raw\/([0-9a-f]{40})(?:\/|$)/i);
+        if (match) {
+            return match[1];
+        }
+    }
+    return "";
+}
+
 // buildGist creates a gist from the GitHub response.
 async function buildGist(response) {
     const schema = await fileContent(response.files["schema.sql"]);
     const query = await fileContent(response.files["query.sql"]);
     const gist = {
         id: response.id,
+        revision: gistRevision(response),
         prefix: ID_PREFIX,
         name: response.description,
         owner: response.owner ? response.owner.login : "",
