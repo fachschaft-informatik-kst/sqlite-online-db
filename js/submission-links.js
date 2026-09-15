@@ -1,9 +1,8 @@
 // Link-based Moodle submissions for registered classroom databases.
 //
-// A submission URL contains only the content identifier of a known base
-// database plus the SQL query tabs. The database itself is loaded from the
-// local registry, so no GitHub token, account, or persistent browser storage
-// is required to open a submission (including in Private Browsing).
+// Submission links contain a short registered database ID plus the SQL query
+// tabs. The base database stays in the repository and is verified by hash when
+// students upload it locally.
 
 import manager from "./sqlite/manager.js";
 import storage from "./storage.js";
@@ -20,7 +19,7 @@ const originalStorageGetTabs = storage.getTabs.bind(storage);
 
 let registryPromise = null;
 let identificationPromise = Promise.resolve(null);
-let currentDatabaseHash = "";
+let currentDatabaseId = "";
 let currentDatabaseEntry = null;
 let pendingSubmission = null;
 let pendingDatabaseName = "";
@@ -48,11 +47,15 @@ async function loadRegistry() {
     return registryPromise;
 }
 
-async function sha256(buffer) {
-    const digest = await crypto.subtle.digest("SHA-256", buffer);
+async function digestHex(algorithm, buffer) {
+    const digest = await crypto.subtle.digest(algorithm, buffer);
     return Array.from(new Uint8Array(digest), (byte) =>
         byte.toString(16).padStart(2, "0")
     ).join("");
+}
+
+function sha256(buffer) {
+    return digestHex("SHA-256", buffer);
 }
 
 async function gitBlobSha1(buffer) {
@@ -61,62 +64,72 @@ async function gitBlobSha1(buffer) {
     const combined = new Uint8Array(prefix.length + bytes.length);
     combined.set(prefix);
     combined.set(bytes, prefix.length);
-    const digest = await crypto.subtle.digest("SHA-1", combined);
-    return Array.from(new Uint8Array(digest), (byte) =>
-        byte.toString(16).padStart(2, "0")
-    ).join("");
+    return digestHex("SHA-1", combined.buffer);
+}
+
+function clearDatabaseIdentification() {
+    currentDatabaseId = "";
+    currentDatabaseEntry = null;
+}
+
+function findByField(registry, field, value) {
+    for (const [id, entry] of Object.entries(registry)) {
+        if (entry && entry[field] === value) {
+            return { id, entry };
+        }
+    }
+    return null;
 }
 
 async function identifyDatabaseFile(file) {
     if (!file || !/\.(db|sqlite|sqlite3)$/i.test(file.name || "")) {
-        currentDatabaseHash = "";
-        currentDatabaseEntry = null;
+        clearDatabaseIdentification();
         return null;
     }
 
     const buffer = await file.arrayBuffer();
-    const hash = await sha256(buffer);
     const registry = await loadRegistry();
-    let registryKey = hash;
-    let entry = registry[registryKey] || null;
+    const hash = await sha256(buffer);
+    let match = findByField(registry, "sha256", hash);
 
-    // Existing repository databases can also be registered by their Git blob
-    // SHA-1. This makes it possible to test the feature without duplicating
-    // binary database files in the repository.
-    if (!entry) {
+    // Keep the existing demo database usable without duplicating it. New
+    // classroom databases should normally be registered with SHA-256.
+    if (!match) {
         const gitHash = await gitBlobSha1(buffer);
-        registryKey = `git:${gitHash}`;
-        entry = registry[registryKey] || null;
+        match = findByField(registry, "gitSha1", gitHash);
     }
 
-    currentDatabaseHash = entry ? registryKey : hash;
-    currentDatabaseEntry = entry;
-    return entry;
+    if (!match) {
+        clearDatabaseIdentification();
+        return null;
+    }
+
+    currentDatabaseId = match.id;
+    currentDatabaseEntry = match.entry;
+    return match.entry;
 }
 
 async function identifyDatabasePath(path) {
     if (!path || !["local", "remote"].includes(path.type) || typeof path.value != "string") {
-        currentDatabaseHash = "";
-        currentDatabaseEntry = null;
+        clearDatabaseIdentification();
         return null;
     }
 
     const targetUrl = new URL(path.value, document.baseURI).href;
     const registry = await loadRegistry();
-    for (const [key, entry] of Object.entries(registry)) {
+    for (const [id, entry] of Object.entries(registry)) {
         if (!entry || !entry.source) {
             continue;
         }
         const sourceUrl = new URL(`../${entry.source}`, import.meta.url).href;
         if (sourceUrl == targetUrl) {
-            currentDatabaseHash = key;
+            currentDatabaseId = id;
             currentDatabaseEntry = entry;
             return entry;
         }
     }
 
-    currentDatabaseHash = "";
-    currentDatabaseEntry = null;
+    clearDatabaseIdentification();
     return null;
 }
 
@@ -132,8 +145,11 @@ function bytesToBase64Url(bytes) {
         .replace(/=+$/g, "");
 }
 
-function base64UrlToBytes(value) {
-    const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+function base64ToBytes(value) {
+    const base64 = value
+        .replace(/\s+/g, "")
+        .replaceAll("-", "+")
+        .replaceAll("_", "/");
     const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
     const binary = atob(padded);
     const bytes = new Uint8Array(binary.length);
@@ -164,13 +180,72 @@ async function gunzip(bytes) {
 }
 
 async function encodeSubmission(payload) {
-    const json = JSON.stringify(payload);
-    const raw = new TextEncoder().encode(json);
+    const raw = new TextEncoder().encode(JSON.stringify(payload));
     const compressed = await gzip(raw);
     if (compressed && compressed.length < raw.length) {
         return `g.${bytesToBase64Url(compressed)}`;
     }
     return `j.${bytesToBase64Url(raw)}`;
+}
+
+function normalizeSubmissionPayload(payload) {
+    // Compact v1 format: {v,d,a,q:[[name,sql], ...]}
+    if (
+        payload &&
+        payload.v === 1 &&
+        typeof payload.d == "string" &&
+        Array.isArray(payload.q) &&
+        payload.q.length
+    ) {
+        const tabs = payload.q.map((item, index) => {
+            if (
+                !Array.isArray(item) ||
+                typeof item[0] != "string" ||
+                typeof item[1] != "string"
+            ) {
+                throw new Error("Submission contains an invalid SQL tab.");
+            }
+            return {
+                id: `submission-${index + 1}`,
+                name: item[0],
+                sql: item[1],
+            };
+        });
+        const activeIndex = Number.isInteger(payload.a) ? payload.a : 0;
+        const safeActiveIndex = Math.max(0, Math.min(activeIndex, tabs.length - 1));
+        return {
+            db: payload.d,
+            tabs,
+            active: tabs[safeActiveIndex].id,
+        };
+    }
+
+    // Backward compatibility with links created by the first PR revision.
+    if (
+        payload &&
+        payload.v === 1 &&
+        typeof payload.db == "string" &&
+        Array.isArray(payload.tabs) &&
+        payload.tabs.length
+    ) {
+        for (const tab of payload.tabs) {
+            if (
+                !tab ||
+                typeof tab.id != "string" ||
+                typeof tab.name != "string" ||
+                typeof tab.sql != "string"
+            ) {
+                throw new Error("Submission contains an invalid SQL tab.");
+            }
+        }
+        return {
+            db: payload.db,
+            tabs: payload.tabs.map((tab) => ({ ...tab })),
+            active: payload.active,
+        };
+    }
+
+    throw new Error("Invalid submission payload.");
 }
 
 async function decodeSubmission(encoded) {
@@ -179,34 +254,15 @@ async function decodeSubmission(encoded) {
         throw new Error("Invalid submission link.");
     }
     const format = encoded.slice(0, separator);
-    let bytes = base64UrlToBytes(encoded.slice(separator + 1));
+    let bytes = base64ToBytes(encoded.slice(separator + 1));
     if (format == "g") {
         bytes = await gunzip(bytes);
     } else if (format != "j") {
         throw new Error("Unsupported submission link version.");
     }
-    const payload = JSON.parse(new TextDecoder().decode(bytes));
-    validatePayload(payload);
-    return payload;
-}
-
-function validatePayload(payload) {
-    if (!payload || payload.v !== 1 || typeof payload.db != "string") {
-        throw new Error("Invalid submission payload.");
-    }
-    if (!Array.isArray(payload.tabs) || !payload.tabs.length) {
-        throw new Error("Submission does not contain SQL queries.");
-    }
-    for (const tab of payload.tabs) {
-        if (
-            !tab ||
-            typeof tab.id != "string" ||
-            typeof tab.name != "string" ||
-            typeof tab.sql != "string"
-        ) {
-            throw new Error("Submission contains an invalid SQL tab.");
-        }
-    }
+    return normalizeSubmissionPayload(
+        JSON.parse(new TextDecoder().decode(bytes))
+    );
 }
 
 async function loadRegistryDatabase(gister, entry) {
@@ -215,10 +271,31 @@ async function loadRegistryDatabase(gister, entry) {
     }
 
     const sourceUrl = new URL(`../${entry.source}`, import.meta.url);
-    if (entry.format == "sql-gzip") {
+
+    if (entry.format == "sqlite-gzip-base64") {
         if (typeof DecompressionStream != "function") {
             throw new Error("This browser cannot open the compressed classroom database.");
         }
+        const response = await fetch(sourceUrl);
+        if (!response.ok) {
+            throw new Error(`Could not load classroom database (${response.status}).`);
+        }
+        const encoded = await response.text();
+        const databaseBytes = await gunzip(base64ToBytes(encoded));
+        if (entry.sha256) {
+            const actualHash = await sha256(databaseBytes.buffer);
+            if (actualHash !== entry.sha256) {
+                throw new Error("Classroom database failed its integrity check.");
+            }
+        }
+        return originalManagerInit(
+            gister,
+            entry.name || "submission.db",
+            new DatabasePath(databaseBytes.buffer, "binary")
+        );
+    }
+
+    if (entry.format == "sql-gzip") {
         const response = await fetch(sourceUrl);
         if (!response.ok) {
             throw new Error(`Could not load classroom database (${response.status}).`);
@@ -273,8 +350,7 @@ manager.init = async function (gister, name, path) {
             identificationPromise = identifyDatabasePath(path).catch(() => null);
             await identificationPromise;
         } else if (!path || path.type != "binary") {
-            currentDatabaseHash = "";
-            currentDatabaseEntry = null;
+            clearDatabaseIdentification();
             identificationPromise = Promise.resolve(null);
         }
         return originalManagerInit(gister, name, path);
@@ -282,7 +358,22 @@ manager.init = async function (gister, name, path) {
 
     const payload = await decodeSubmission(path.value.slice(SUBMISSION_PREFIX.length));
     const registry = await loadRegistry();
-    const entry = registry[payload.db];
+    let entry = registry[payload.db];
+    let databaseId = payload.db;
+
+    // Compatibility with first-revision links where the hash itself was the
+    // registry key. Find the new short ID by the stored hash fields.
+    if (!entry) {
+        const legacyHash = payload.db.startsWith("git:")
+            ? { field: "gitSha1", value: payload.db.slice(4) }
+            : { field: "sha256", value: payload.db };
+        const match = findByField(registry, legacyHash.field, legacyHash.value);
+        if (match) {
+            databaseId = match.id;
+            entry = match.entry;
+        }
+    }
+
     if (!entry) {
         throw new Error("The database used for this submission is not registered.");
     }
@@ -290,7 +381,7 @@ manager.init = async function (gister, name, path) {
     pendingSubmission = payload;
     pendingDatabaseName = entry.name || "submission.db";
     pendingTabsServed = false;
-    currentDatabaseHash = payload.db;
+    currentDatabaseId = databaseId;
     currentDatabaseEntry = entry;
 
     const database = await loadRegistryDatabase(gister, entry);
@@ -300,7 +391,7 @@ manager.init = async function (gister, name, path) {
     database.name = pendingDatabaseName;
     database.query = activeSubmissionSql(payload);
     database.path = path;
-    database.submissionHash = payload.db;
+    database.submissionDatabaseId = databaseId;
     scheduleSubmissionUiRestore(payload, entry);
     return database;
 };
@@ -385,7 +476,10 @@ function snapshotQueryTabs() {
     }
     return {
         tabs,
-        active: app.state.activeQueryTabId,
+        activeIndex: Math.max(
+            0,
+            tabs.findIndex((tab) => tab.id == app.state.activeQueryTabId)
+        ),
     };
 }
 
@@ -407,7 +501,7 @@ async function createSubmissionLink(button) {
     button.disabled = true;
     try {
         await identificationPromise;
-        if (!currentDatabaseHash || !currentDatabaseEntry) {
+        if (!currentDatabaseId || !currentDatabaseEntry) {
             app.ui.status.error(
                 "This database is not registered for link submissions. Use a registered assignment database."
             );
@@ -422,9 +516,9 @@ async function createSubmissionLink(button) {
 
         const payload = {
             v: 1,
-            db: currentDatabaseHash,
-            tabs: snapshot.tabs,
-            active: snapshot.active,
+            d: currentDatabaseId,
+            a: snapshot.activeIndex,
+            q: snapshot.tabs.map((tab) => [tab.name, tab.sql]),
         };
         const encoded = await encodeSubmission(payload);
         const url = new URL(window.location.href);
@@ -463,8 +557,7 @@ if (toolbar) {
     toolbar.addEventListener("open-file", (event) => {
         identificationPromise = identifyDatabaseFile(event.detail).catch((error) => {
             console.warn("Could not identify classroom database", error);
-            currentDatabaseHash = "";
-            currentDatabaseEntry = null;
+            clearDatabaseIdentification();
             return null;
         });
     });
