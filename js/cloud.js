@@ -2,7 +2,7 @@
 
 // Uses Github Gist API for users with credentials.
 
-import github from "./cloud/github.js?v=20260913-5";
+import github from "./cloud/github.js?v=20260915-6";
 
 const PROVIDERS = {
     [github.prefix]: github,
@@ -60,11 +60,27 @@ class Gister {
 
     // get returns a gist by its id.
     // Uses the provider specified in the path value,
-    // e.g. 'gist:12345'.
+    // e.g. 'gist:12345' or the revision-pinned 'gist:12345@abcdef...'.
     get(pathValue) {
-        const [prefix, id] = pathValue.split(":");
+        const separator = pathValue.indexOf(":");
+        if (separator < 1) {
+            return Promise.resolve(null);
+        }
+
+        const prefix = pathValue.slice(0, separator);
+        const reference = pathValue.slice(separator + 1);
         const provider = PROVIDERS[prefix];
-        return provider.get(id);
+        if (!provider) {
+            return Promise.resolve(null);
+        }
+
+        const revisionSeparator = reference.lastIndexOf("@");
+        if (revisionSeparator > 0) {
+            const id = reference.slice(0, revisionSeparator);
+            const revision = reference.slice(revisionSeparator + 1);
+            return provider.get(id, revision);
+        }
+        return provider.get(reference);
     }
 
     // create creates a new gist.
