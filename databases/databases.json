@@ -11,7 +11,7 @@
     "bib1": {
       "name": "bibliothek.db",
       "title": "Bibliothek",
-      "source": "databases/bibliothek.db.gz.b64",
+      "source": "databases/bib1.db.gz.b64",
       "format": "sqlite-gzip-base64",
       "sha256": "f412b0c34a93a84413638a320700a6cc45dc9b2633a1ec8e43900ac604a4f959"
     }
