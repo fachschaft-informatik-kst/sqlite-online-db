@@ -134,7 +134,7 @@ async function loadSql(name, path) {
     return database;
 }
 
-// loadGist loads a database from the cloud with the specified id.
+// loadGist loads a database from the cloud with the specified id/revision.
 async function loadGist(gister, path) {
     if (!gister) {
         return Promise.reject("Saving to the cloud is not supported");
@@ -146,7 +146,11 @@ async function loadGist(gister, path) {
     }
     const db = new sqlite3.oo1.DB();
     const database = new SQLite(gist.name, path, sqlite3.capi, db);
-    database.id = gist.id;
+    database.gistId = gist.id;
+    database.revision = gist.revision || "";
+    database.id = database.revision
+        ? `${gist.id}@${database.revision}`
+        : gist.id;
     database.owner = gist.owner;
     database.execute(gist.schema);
     database.gatherTables();
@@ -192,7 +196,11 @@ function afterSave(database, gist) {
     if (!gist.id) {
         return null;
     }
-    database.id = gist.id;
+    database.gistId = gist.id;
+    database.revision = gist.revision || "";
+    database.id = database.revision
+        ? `${gist.id}@${database.revision}`
+        : gist.id;
     database.owner = gist.owner;
     database.path.type = "id";
     database.path.value = `${gist.prefix}:${database.id}`;
