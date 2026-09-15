@@ -1,8 +1,9 @@
-// Link-based Moodle submissions for registered classroom databases.
+// Link-based Moodle submissions.
 //
-// Submission links contain a short registered database ID plus the SQL query
-// tabs. The base database stays in the repository and is verified by hash when
-// students upload it locally.
+// Public GitHub Gists are the preferred database registry: when a database is
+// saved as a Gist, its Gist ID becomes the stable source identifier used by
+// submission links. A small static registry remains supported as a fallback
+// for locally distributed classroom databases.
 
 import manager from "./sqlite/manager.js";
 import storage from "./storage.js";
@@ -14,6 +15,7 @@ const MAX_SUBMISSION_URL_LENGTH = 60000;
 const STUDENT_MODE_PARAM = "student";
 
 const originalManagerInit = manager.init.bind(manager);
+const originalManagerSave = manager.save.bind(manager);
 const originalStorageGet = storage.get.bind(storage);
 const originalStorageGetTabs = storage.getTabs.bind(storage);
 
@@ -33,16 +35,16 @@ function isSubmissionPath(path) {
     );
 }
 
+function isGistDatabaseId(value) {
+    return typeof value == "string" && value.startsWith("gist:");
+}
+
 async function loadRegistry() {
     if (!registryPromise) {
         registryPromise = fetch(REGISTRY_URL, { cache: "no-cache" })
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`Could not load database registry (${response.status})`);
-                }
-                return response.json();
-            })
-            .then((registry) => registry.databases || {});
+            .then((response) => (response.ok ? response.json() : { databases: {} }))
+            .then((registry) => registry.databases || {})
+            .catch(() => ({}));
     }
     return registryPromise;
 }
@@ -72,6 +74,19 @@ function clearDatabaseIdentification() {
     currentDatabaseEntry = null;
 }
 
+function setGistIdentification(database) {
+    if (!database || !database.id) {
+        return false;
+    }
+    currentDatabaseId = `gist:${database.id}`;
+    currentDatabaseEntry = {
+        name: database.name || "database.db",
+        title: database.meaningfulName || database.name || "Gist database",
+        format: "gist",
+    };
+    return true;
+}
+
 function findByField(registry, field, value) {
     for (const [id, entry] of Object.entries(registry)) {
         if (entry && entry[field] === value) {
@@ -92,8 +107,6 @@ async function identifyDatabaseFile(file) {
     const hash = await sha256(buffer);
     let match = findByField(registry, "sha256", hash);
 
-    // Keep the existing demo database usable without duplicating it. New
-    // classroom databases should normally be registered with SHA-256.
     if (!match) {
         const gitHash = await gitBlobSha1(buffer);
         match = findByField(registry, "gitSha1", gitHash);
@@ -111,7 +124,6 @@ async function identifyDatabaseFile(file) {
 
 async function identifyDatabasePath(path) {
     if (!path || !["local", "remote"].includes(path.type) || typeof path.value != "string") {
-        clearDatabaseIdentification();
         return null;
     }
 
@@ -128,8 +140,6 @@ async function identifyDatabasePath(path) {
             return entry;
         }
     }
-
-    clearDatabaseIdentification();
     return null;
 }
 
@@ -189,7 +199,6 @@ async function encodeSubmission(payload) {
 }
 
 function normalizeSubmissionPayload(payload) {
-    // Compact v1 format: {v,d,a,q:[[name,sql], ...]}
     if (
         payload &&
         payload.v === 1 &&
@@ -220,7 +229,7 @@ function normalizeSubmissionPayload(payload) {
         };
     }
 
-    // Backward compatibility with links created by the first PR revision.
+    // Backward compatibility with the first PR revision.
     if (
         payload &&
         payload.v === 1 &&
@@ -228,16 +237,6 @@ function normalizeSubmissionPayload(payload) {
         Array.isArray(payload.tabs) &&
         payload.tabs.length
     ) {
-        for (const tab of payload.tabs) {
-            if (
-                !tab ||
-                typeof tab.id != "string" ||
-                typeof tab.name != "string" ||
-                typeof tab.sql != "string"
-            ) {
-                throw new Error("Submission contains an invalid SQL tab.");
-            }
-        }
         return {
             db: payload.db,
             tabs: payload.tabs.map((tab) => ({ ...tab })),
@@ -273,9 +272,6 @@ async function loadRegistryDatabase(gister, entry) {
     const sourceUrl = new URL(`../${entry.source}`, import.meta.url);
 
     if (entry.format == "sqlite-gzip-base64") {
-        if (typeof DecompressionStream != "function") {
-            throw new Error("This browser cannot open the compressed classroom database.");
-        }
         const response = await fetch(sourceUrl);
         if (!response.ok) {
             throw new Error(`Could not load classroom database (${response.status}).`);
@@ -316,28 +312,62 @@ async function loadRegistryDatabase(gister, entry) {
     );
 }
 
+async function loadSubmissionDatabase(gister, databaseId) {
+    if (isGistDatabaseId(databaseId)) {
+        return originalManagerInit(
+            gister,
+            "",
+            new DatabasePath(databaseId, "id")
+        );
+    }
+
+    const registry = await loadRegistry();
+    let entry = registry[databaseId];
+    let resolvedId = databaseId;
+
+    if (!entry) {
+        const legacyHash = databaseId.startsWith("git:")
+            ? { field: "gitSha1", value: databaseId.slice(4) }
+            : { field: "sha256", value: databaseId };
+        const match = findByField(registry, legacyHash.field, legacyHash.value);
+        if (match) {
+            resolvedId = match.id;
+            entry = match.entry;
+        }
+    }
+
+    if (!entry) {
+        throw new Error("The database used for this submission is not available.");
+    }
+
+    const database = await loadRegistryDatabase(gister, entry);
+    database.submissionDatabaseId = resolvedId;
+    return database;
+}
+
 function activeSubmissionSql(payload) {
     const active = payload.tabs.find((tab) => tab.id == payload.active);
     return (active || payload.tabs[0]).sql || "";
 }
 
-function scheduleSubmissionUiRestore(payload, entry) {
+function scheduleSubmissionUiRestore(payload, title) {
     setTimeout(() => {
         const app = window.app;
         if (!app || !app.ui) {
             return;
         }
 
-        const activeId = payload.active;
-        const tab = activeId
-            ? app.ui.queryTabs.querySelector(`[data-query-tab-id="${CSS.escape(activeId)}"]`)
+        const tab = payload.active
+            ? app.ui.queryTabs.querySelector(
+                  `[data-query-tab-id="${CSS.escape(payload.active)}"]`
+              )
             : null;
-        if (tab && app.state.activeQueryTabId != activeId) {
+        if (tab && app.state.activeQueryTabId != payload.active) {
             tab.click();
         }
 
         app.ui.status.success(
-            `Submission loaded: ${escapeHtml(entry.title || entry.name || "database")} · ${payload.tabs.length} SQL ${payload.tabs.length == 1 ? "tab" : "tabs"}`
+            `Submission loaded: ${escapeHtml(title)} · ${payload.tabs.length} SQL ${payload.tabs.length == 1 ? "tab" : "tabs"}`
         );
         pendingSubmission = null;
         pendingDatabaseName = "";
@@ -345,58 +375,70 @@ function scheduleSubmissionUiRestore(payload, entry) {
 }
 
 manager.init = async function (gister, name, path) {
-    if (!isSubmissionPath(path)) {
-        if (path && ["local", "remote"].includes(path.type)) {
-            identificationPromise = identifyDatabasePath(path).catch(() => null);
-            await identificationPromise;
-        } else if (!path || path.type != "binary") {
-            clearDatabaseIdentification();
-            identificationPromise = Promise.resolve(null);
+    if (isSubmissionPath(path)) {
+        const payload = await decodeSubmission(
+            path.value.slice(SUBMISSION_PREFIX.length)
+        );
+        pendingSubmission = payload;
+        pendingTabsServed = false;
+
+        const database = await loadSubmissionDatabase(gister, payload.db);
+        if (!database) {
+            throw new Error("Could not reconstruct the submission database.");
         }
-        return originalManagerInit(gister, name, path);
-    }
 
-    const payload = await decodeSubmission(path.value.slice(SUBMISSION_PREFIX.length));
-    const registry = await loadRegistry();
-    let entry = registry[payload.db];
-    let databaseId = payload.db;
+        pendingDatabaseName = database.name || "submission.db";
+        database.query = activeSubmissionSql(payload);
+        database.path = path;
 
-    // Compatibility with first-revision links where the hash itself was the
-    // registry key. Find the new short ID by the stored hash fields.
-    if (!entry) {
-        const legacyHash = payload.db.startsWith("git:")
-            ? { field: "gitSha1", value: payload.db.slice(4) }
-            : { field: "sha256", value: payload.db };
-        const match = findByField(registry, legacyHash.field, legacyHash.value);
-        if (match) {
-            databaseId = match.id;
-            entry = match.entry;
+        if (isGistDatabaseId(payload.db)) {
+            currentDatabaseId = payload.db;
+            currentDatabaseEntry = {
+                name: database.name,
+                title: database.meaningfulName || database.name || "Gist database",
+                format: "gist",
+            };
+        } else {
+            currentDatabaseId = database.submissionDatabaseId || payload.db;
+            const registry = await loadRegistry();
+            currentDatabaseEntry = registry[currentDatabaseId] || {
+                name: database.name,
+                title: database.name,
+            };
         }
+
+        scheduleSubmissionUiRestore(
+            payload,
+            currentDatabaseEntry.title || currentDatabaseEntry.name || "database"
+        );
+        return database;
     }
 
-    if (!entry) {
-        throw new Error("The database used for this submission is not registered.");
+    if (path && ["local", "remote"].includes(path.type)) {
+        identificationPromise = identifyDatabasePath(path).catch(() => null);
+        await identificationPromise;
+    } else if (!path || !["binary", "id"].includes(path.type)) {
+        clearDatabaseIdentification();
+        identificationPromise = Promise.resolve(null);
     }
 
-    pendingSubmission = payload;
-    pendingDatabaseName = entry.name || "submission.db";
-    pendingTabsServed = false;
-    currentDatabaseId = databaseId;
-    currentDatabaseEntry = entry;
-
-    const database = await loadRegistryDatabase(gister, entry);
-    if (!database) {
-        throw new Error("Could not reconstruct the submission database.");
+    const database = await originalManagerInit(gister, name, path);
+    if (path && path.type == "id" && database) {
+        setGistIdentification(database);
     }
-    database.name = pendingDatabaseName;
-    database.query = activeSubmissionSql(payload);
-    database.path = path;
-    database.submissionDatabaseId = databaseId;
-    scheduleSubmissionUiRestore(payload, entry);
     return database;
 };
 
-// A submission must win over stale local query state from a previous session.
+// Creating or updating a public Gist automatically registers that Gist as the
+// submission database. No databases.json edit is required.
+manager.save = async function (gister, database, query) {
+    const savedDatabase = await originalManagerSave(gister, database, query);
+    if (savedDatabase) {
+        setGistIdentification(savedDatabase);
+    }
+    return savedDatabase;
+};
+
 storage.get = function (key) {
     if (pendingSubmission && key == pendingDatabaseName) {
         return null;
@@ -451,15 +493,12 @@ function applyStudentMode() {
     }
 
     document.querySelector('#toolbar a[href="settings.html"]')?.remove();
-    const save = document.querySelector("#save");
-    const askAi = document.querySelector("#ask-ai");
-    if (save) {
-        save.hidden = true;
-        save.style.display = "none";
-    }
-    if (askAi) {
-        askAi.hidden = true;
-        askAi.style.display = "none";
+    for (const selector of ["#save", "#ask-ai"]) {
+        const element = document.querySelector(selector);
+        if (element) {
+            element.hidden = true;
+            element.style.display = "none";
+        }
     }
 }
 
@@ -503,7 +542,7 @@ async function createSubmissionLink(button) {
         await identificationPromise;
         if (!currentDatabaseId || !currentDatabaseEntry) {
             app.ui.status.error(
-                "This database is not registered for link submissions. Use a registered assignment database."
+                "This database is not registered for submissions. Open it from a public Gist or use a registered classroom database."
             );
             return;
         }
@@ -535,9 +574,12 @@ async function createSubmissionLink(button) {
 
         const copied = await writeClipboard(shareUrl);
         window.app.lastSubmissionUrl = shareUrl;
+        const sourceLabel = isGistDatabaseId(currentDatabaseId)
+            ? "public Gist"
+            : currentDatabaseEntry.title || currentDatabaseEntry.name;
         if (copied) {
             app.ui.status.success(
-                `✓ Submission link copied · ${escapeHtml(currentDatabaseEntry.title || currentDatabaseEntry.name)} · ${snapshot.tabs.length} SQL ${snapshot.tabs.length == 1 ? "tab" : "tabs"}`
+                `✓ Submission link copied · ${escapeHtml(sourceLabel)} · ${snapshot.tabs.length} SQL ${snapshot.tabs.length == 1 ? "tab" : "tabs"}`
             );
         } else {
             window.prompt("Copy this submission link into Moodle:", shareUrl);
@@ -550,8 +592,8 @@ async function createSubmissionLink(button) {
     }
 }
 
-// `open-file` is intentionally dispatched as a non-bubbling custom event by
-// the toolbar component, so listen on the toolbar element itself.
+// Local file uploads can still use the optional static registry. `open-file`
+// is a non-bubbling event, so listen directly on the toolbar element.
 const toolbar = document.querySelector("#toolbar");
 if (toolbar) {
     toolbar.addEventListener("open-file", (event) => {
