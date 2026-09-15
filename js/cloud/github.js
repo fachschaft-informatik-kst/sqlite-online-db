@@ -58,7 +58,13 @@ class Github {
                 if (!response.files || !("query.sql" in response.files)) {
                     return null;
                 }
-                return await buildGist(response);
+                const gist = await buildGist(response);
+                // The requested SHA is authoritative for revision endpoints;
+                // do not depend on the ordering/content of response.history.
+                if (revision) {
+                    gist.revision = revision;
+                }
+                return gist;
             });
         return promise;
     }
