@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "databases": {
+    "git:ef576abd986b6bc99a73900fc142c24381342793": {
+      "name": "demo.db",
+      "title": "Demo database",
+      "source": "demo.db",
+      "format": "sqlite"
+    }
+  }
+}
