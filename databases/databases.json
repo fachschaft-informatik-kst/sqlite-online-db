@@ -1,11 +1,19 @@
 {
-  "version": 1,
+  "version": 2,
   "databases": {
-    "git:ef576abd986b6bc99a73900fc142c24381342793": {
+    "demo1": {
       "name": "demo.db",
       "title": "Demo database",
       "source": "demo.db",
-      "format": "sqlite"
+      "format": "sqlite",
+      "gitSha1": "ef576abd986b6bc99a73900fc142c24381342793"
+    },
+    "bib1": {
+      "name": "bibliothek.db",
+      "title": "Bibliothek",
+      "source": "databases/bibliothek.db.gz.b64",
+      "format": "sqlite-gzip-base64",
+      "sha256": "f412b0c34a93a84413638a320700a6cc45dc9b2633a1ec8e43900ac604a4f959"
     }
   }
 }
