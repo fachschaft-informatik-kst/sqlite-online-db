@@ -1,0 +1,22 @@
+name: Regression checks
+
+on:
+  push:
+    branches: [feature/fast-cache-settings-navigation]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check application JavaScript syntax
+        run: |
+          find js test -type f \( -name '*.js' -o -name '*.mjs' \) -print0 |
+            while IFS= read -r -d '' file; do node --check "$file" || exit 1; done
+      - name: Cache and settings regression tests
+        run: node --test test/cache-regression.test.mjs
