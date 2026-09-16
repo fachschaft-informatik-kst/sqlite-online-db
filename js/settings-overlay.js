@@ -1,5 +1,5 @@
-// Display Settings in the existing page so navigating back never rebuilds SQLite.
-// The same-origin iframe reuses the existing settings form and its save behavior.
+// Display Settings above the playground: the live SQLite connection stays mounted.
+// The same-origin iframe reuses the existing settings form and save behavior.
 let overlay = null;
 let frame = null;
 let previousFocus = null;
@@ -8,6 +8,7 @@ let previousOverflow = "";
 function closeSettings() {
     if (!overlay || overlay.hidden) return;
     overlay.hidden = true;
+    overlay.style.display = "none";
     document.body.style.overflow = previousOverflow;
     window.app?.gister?.reload?.();
     previousFocus?.focus?.();
@@ -16,6 +17,8 @@ function closeSettings() {
 function setupFrame() {
     const doc = frame?.contentDocument;
     if (!doc) return;
+    // The standalone Settings page uses history.back(). Inside an iframe it
+    // must close the overlay instead, without leaving/reloading the playground.
     const back = doc.querySelector('a[href="javascript:history.go(-1)"]');
     back?.addEventListener("click", (event) => {
         event.preventDefault();
@@ -39,10 +42,8 @@ function ensureOverlay() {
     overlay.setAttribute("aria-label", "Settings");
     Object.assign(overlay.style, {
         position: "fixed", inset: "0", zIndex: "10000", background: "rgba(0,0,0,.65)",
-        display: "flex", alignItems: "center", justifyContent: "center", padding: "12px",
+        display: "none", alignItems: "center", justifyContent: "center", padding: "12px",
     });
-    // The HTML hidden attribute must take precedence over the inline flex display.
-    overlay.style.display = "none";
     const panel = document.createElement("section");
     Object.assign(panel.style, {
         width: "min(850px, 100%)", height: "min(850px, 94vh)", position: "relative",
@@ -73,6 +74,7 @@ function ensureOverlay() {
 
 function openSettings() {
     ensureOverlay();
+    if (!overlay.hidden) return Promise.resolve();
     previousFocus = document.activeElement;
     previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -82,7 +84,6 @@ function openSettings() {
     return Promise.resolve();
 }
 
-// Public API also used by Settings links inside SQLime's result view.
 window.SqlimeSettingsOverlay = { open: openSettings, close: closeSettings };
 
 document.addEventListener("click", (event) => {
@@ -99,7 +100,7 @@ document.addEventListener("keydown", (event) => {
         closeSettings();
         return;
     }
-    // The keyboard shortcut otherwise invokes the old save() -> full navigation.
+    // Without credentials, index.js's Ctrl+S shortcut navigates to settings.html.
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" &&
         window.app && !window.app.gister.hasCredentials()) {
         event.preventDefault();
