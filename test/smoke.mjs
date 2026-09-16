@@ -18,7 +18,7 @@ const gist = {
 
 async function ready(page) {
     await page.waitForFunction(() => window.app?.ui?.name?.classList.contains('ready') &&
-        window.app?.state?.blockCount === 0, { timeout: 20000 });
+        window.app?.state?.blockCount === 0, null, { timeout: 20000 });
 }
 
 async function runSql(page, sql) {
@@ -42,7 +42,10 @@ try {
     await page.goto(`${base}/index.html#demo.db`);
     await ready(page);
     await runSql(page, 'CREATE TABLE smoke_settings(value INTEGER); INSERT INTO smoke_settings VALUES (42);');
-    const editorBefore = await page.evaluate(() => window.app.ui.editor);
+    await page.evaluate(() => {
+        window.__smokeEditor = window.app.ui.editor;
+        window.__smokeState = window.app.state;
+    });
     await page.locator('#toolbar a[href="settings.html"]').click();
     await page.waitForFunction(() => {
         const dialog = document.querySelector('#sqlime-settings-overlay');
@@ -56,8 +59,9 @@ try {
         const dialog = document.querySelector('#sqlime-settings-overlay');
         return dialog?.hidden && dialog.style.display === 'none';
     });
-    assert.equal(await page.evaluate((prior) => window.app.ui.editor === prior, editorBefore), false,
-        'Playwright cannot pass a DOM reference across evaluate calls');
+    assert.equal(await page.evaluate(() => window.app.ui.editor === window.__smokeEditor &&
+        window.app.state === window.__smokeState), true,
+        'Settings round-trip must preserve the exact editor and application state');
     assert.match(await runSql(page, 'SELECT value FROM smoke_settings'), /42/,
         'Settings round-trip must preserve in-memory changes');
     console.log('PASS: Settings opens/closes without database reload or data loss');
