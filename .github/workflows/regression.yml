@@ -20,3 +20,20 @@ jobs:
             while IFS= read -r -d '' file; do node --check "$file" || exit 1; done
       - name: Cache and settings regression tests
         run: node --test test/cache-regression.test.mjs
+      - name: Real Chromium smoke test
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || true)"
+          test -n "$CHROME" || { echo 'Chromium/Chrome missing on runner'; exit 1; }
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/sqlime-http.log 2>&1 &
+          sleep 1
+          timeout 55s "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --virtual-time-budget=25000 --dump-dom \
+            http://127.0.0.1:8765/test/browser-smoke.html \
+            >/tmp/sqlime-smoke.html 2>/tmp/sqlime-browser.log || true
+          sed -n '/SMOKE_\(PASS\|FAIL\)/,+12p' /tmp/sqlime-smoke.html | head -20
+          grep -q 'SMOKE_PASS' /tmp/sqlime-smoke.html || {
+            echo 'Browser smoke failed:'
+            tail -70 /tmp/sqlime-smoke.html
+            tail -40 /tmp/sqlime-browser.log
+            exit 1
+          }
