@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Playground browser smoke</title></head>
+<body>
+<pre id="audit-results">SMOKE_RUNNING</pre>
+<script type="module">
+const output = document.querySelector('#audit-results');
+const checks = [];
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function check(description, result) {
+    checks.push(`${result ? 'PASS' : 'FAIL'} ${description}`);
+    if (!result) throw new Error(description);
+}
+async function until(predicate, label, timeout = 15000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+        try { if (predicate()) return; } catch (error) { /* Not initialized yet. */ }
+        await pause(75);
+    }
+    throw new Error(`Timed out: ${label}`);
+}
+async function loadPlayground(url) {
+    const frame = document.createElement('iframe');
+    frame.style.cssText = 'width:750px;height:550px;display:block';
+    frame.src = url;
+    document.body.appendChild(frame);
+    await until(() => frame.contentWindow?.app?.state?.queryTabs?.length &&
+        frame.contentWindow.app.ui.name.value === 'demo.db' &&
+        frame.contentWindow.app.state.blockCount === 0,
+        'playground startup');
+    return frame;
+}
+async function execute(app, sql) {
+    app.ui.editor.value = sql;
+    app.ui.editor.input.dispatchEvent(new Event('input', { bubbles: true }));
+    app.ui.buttons.execute.click();
+    await until(() => !app.ui.status.el.classList.contains('sqlime-status--loading'), 'SQL execution');
+    await pause(80);
+}
+try {
+    const frame = await loadPlayground('../index.html#demo.db');
+    const win = frame.contentWindow;
+    const app = win.app;
+    check('demo DB and query tab loaded', app.state.queryTabs.length === 1);
+    await execute(app, 'CREATE TABLE IF NOT EXISTS audit_marker (value INTEGER); INSERT INTO audit_marker VALUES (41); SELECT value FROM audit_marker;');
+    check('real SQLite WASM executes statements', app.ui.result.innerText.includes('41'));
+    const originalTabs = app.state.queryTabs;
+    const originalFrameDocument = frame.contentDocument;
+    await app.actions.visit('settings');
+    await until(() => win.document.querySelector('#sqlime-settings-overlay')?.style.display === 'flex', 'settings opens');
+    const overlay = win.document.querySelector('#sqlime-settings-overlay');
+    const settingsFrame = overlay.querySelector('iframe');
+    await until(() => settingsFrame.contentDocument?.readyState === 'complete' &&
+        settingsFrame.contentWindow.location.pathname.endsWith('/settings.html'), 'settings iframe');
+    await pause(80);
+    settingsFrame.contentDocument.querySelector('a[href="javascript:history.go(-1)"]').click();
+    await until(() => overlay.hidden && overlay.style.display === 'none', 'settings closes');
+    check('back from Settings keeps same document and tabs',
+        frame.contentDocument === originalFrameDocument && app.state.queryTabs === originalTabs);
+    await pause(650); // Avoid the Run button's deliberate double-click throttle.
+    await execute(app, 'SELECT value FROM audit_marker;');
+    check('back from Settings preserves the in-memory database', app.ui.result.innerText.includes('41'));
+
+    app.ui.editor.value = 'SELECT 42 AS first_query';
+    app.ui.editor.input.dispatchEvent(new Event('input', { bubbles: true }));
+    app.ui.queryTabs.querySelector('[data-query-tab-new]').click();
+    app.ui.editor.value = 'SELECT 99 AS second_query';
+    app.ui.editor.input.dispatchEvent(new Event('input', { bubbles: true }));
+    check('two SQL tabs created', app.state.queryTabs.length === 2);
+    Object.defineProperty(win.navigator, 'clipboard', {
+        configurable: true, value: { writeText: async () => {} },
+    });
+    win.prompt = (_title, value) => value;
+    win.document.querySelector('#submit-submission').click();
+    await until(() => typeof app.lastSubmissionUrl === 'string', 'submission link generated');
+    const submission = new URL(app.lastSubmissionUrl);
+    check('submission has URL payload, not GitHub credentials', submission.hash.startsWith('#submission='));
+    const reviewFrame = await loadPlayground(submission.href);
+    const review = reviewFrame.contentWindow.app;
+    await until(() => review.state.queryTabs.length === 2 &&
+        review.state.queryTabs[1].sql === 'SELECT 99 AS second_query', 'submission tabs restored');
+    check('submission restores every SQL tab and the active SQL',
+        review.state.queryTabs[0].sql === 'SELECT 42 AS first_query' &&
+        review.ui.editor.value === 'SELECT 99 AS second_query');
+    await execute(review, 'SELECT 99 AS second_query');
+    check('restored submission runs immediately', review.ui.result.innerText.includes('99'));
+    output.textContent = `SMOKE_PASS\n${checks.join('\n')}`;
+} catch (error) {
+    output.textContent = `SMOKE_FAIL ${error.stack || error}\n${checks.join('\n')}`;
+}
+</script>
+</body>
+</html>
