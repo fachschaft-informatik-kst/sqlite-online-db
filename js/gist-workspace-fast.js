@@ -7,7 +7,7 @@ const DB_NAME = "sqlime-workspaces";
 const DB_VERSION = 2;
 const WORKSPACE_STORE = "gist-snapshots"; // Existing store; legacy SQL snapshots are migrated.
 const BASE_STORE = "gist-base-snapshots";
-const SNAPSHOT_DELAY_MS = 600;
+const SNAPSHOT_DELAY_MS = 200;
 const QUERY_PREFIX = "sqlime.query.";
 const TABS_PREFIX = "sqlime.tabs.";
 
@@ -15,8 +15,10 @@ const originalInit = manager.init.bind(manager);
 const originalSave = manager.save.bind(manager);
 const originalExecute = SQLite.prototype.execute;
 const snapshotTimers = new WeakMap();
-const snapshotting = new WeakSet();
 const saving = new WeakSet();
+const pendingWrites = new Map();
+const invalidatedKeys = new Set();
+let activeDatabase = null;
 let managerInitDepth = 0;
 
 function submissionMode() {
@@ -107,14 +109,18 @@ function isGistDatabase(database) {
     return Boolean(gistKey(database?.path));
 }
 
+// Serializing writes per key avoids a slower old snapshot overwriting a newer one.
+// Invalidation also prevents an in-flight write from recreating a cleared cache.
 async function persistSnapshot(database, store = WORKSPACE_STORE) {
-    if (!isGistDatabase(database) || snapshotting.has(database) || saving.has(database)) return;
-    snapshotting.add(database);
+    const key = gistKey(database?.path);
+    if (!key || saving.has(database) ||
+        (store === WORKSPACE_STORE && invalidatedKeys.has(key))) return;
+
+    let snapshot;
     try {
-        // Export real SQLite pages. Replaying thousands of INSERT statements is much slower.
         const bytes = database.capi.sqlite3_js_db_export(database.db.pointer);
-        await writeSnapshot(store, {
-            key: database.path.value,
+        snapshot = {
+            key,
             bytes: bytes.slice().buffer,
             name: database.name,
             query: database.query || "",
@@ -124,11 +130,23 @@ async function persistSnapshot(database, store = WORKSPACE_STORE) {
             owner: database.owner,
             baseHashcode: database.hashcode,
             updatedAt: Date.now(),
-        });
+        };
     } catch (error) {
-        console.warn("Could not cache SQLite database", error);
+        console.warn("Could not export SQLite database for cache", error);
+        return;
+    }
+
+    const writeKey = `${store}:${key}`;
+    const previous = pendingWrites.get(writeKey) || Promise.resolve();
+    const write = previous.catch(() => {}).then(() => {
+        if (store === WORKSPACE_STORE && invalidatedKeys.has(key)) return;
+        return writeSnapshot(store, snapshot);
+    });
+    pendingWrites.set(writeKey, write);
+    try {
+        await write;
     } finally {
-        snapshotting.delete(database);
+        if (pendingWrites.get(writeKey) === write) pendingWrites.delete(writeKey);
     }
 }
 
@@ -174,8 +192,7 @@ async function restoreSnapshot(gister, path, snapshot) {
 manager.init = async function (gister, name, path) {
     const key = gistKey(path);
     const immutableSubmission = Boolean(key && submissionMode());
-    // Pinned submissions can share a read-only base cache. Unpinned legacy links
-    // must fetch GitHub rather than accidentally showing a locally edited workspace.
+    // Never reuse the teacher's editable Gist state for a submission.
     const store = immutableSubmission ? BASE_STORE : WORKSPACE_STORE;
     const canCache = Boolean(key && (!immutableSubmission || pinnedRevision(key)));
     if (canCache) {
@@ -183,7 +200,11 @@ manager.init = async function (gister, name, path) {
         if (snapshot) {
             try {
                 const restored = await restoreSnapshot(gister, path, snapshot);
-                if (restored) { updateReloadButton(path); return restored; }
+                if (restored) {
+                    activeDatabase = restored;
+                    updateReloadButton(path);
+                    return restored;
+                }
             } catch (error) {
                 console.warn("Invalid SQLite cache; fetching Gist", error);
             }
@@ -197,6 +218,7 @@ manager.init = async function (gister, name, path) {
         if (database && isGistDatabase(database) && canCache) {
             await persistSnapshot(database, store);
         }
+        activeDatabase = database;
         updateReloadButton(database?.path || null);
         return database;
     } finally {
@@ -214,6 +236,7 @@ manager.save = async function (gister, database, query) {
     }
     if (savedDatabase && isGistDatabase(savedDatabase)) {
         await persistSnapshot(savedDatabase);
+        activeDatabase = savedDatabase;
         updateReloadButton(savedDatabase.path);
     }
     return savedDatabase;
@@ -226,10 +249,20 @@ function definitelyReadOnly(sql) {
 }
 
 SQLite.prototype.execute = function (sql, updateQuery = true) {
-    const result = originalExecute.call(this, sql, updateQuery);
+    let result;
+    try {
+        result = originalExecute.call(this, sql, updateQuery);
+    } catch (error) {
+        // SQLite can apply an earlier statement before a later statement fails.
+        if (updateQuery !== false && managerInitDepth === 0 &&
+            !saving.has(this) && isGistDatabase(this) && !submissionMode()) {
+            scheduleSnapshot(this);
+        }
+        throw error;
+    }
     if (updateQuery !== false && managerInitDepth === 0 &&
-        !snapshotting.has(this) && !saving.has(this) &&
-        isGistDatabase(this) && !submissionMode() && !definitelyReadOnly(sql)) {
+        !saving.has(this) && isGistDatabase(this) &&
+        !submissionMode() && !definitelyReadOnly(sql)) {
         scheduleSnapshot(this);
     }
     return result;
@@ -273,19 +306,43 @@ async function reloadFromGist(event) {
     const key = button.dataset.workspaceKey || currentGistKey();
     if (!key || submissionMode()) return;
     button.disabled = true;
-    const timer = snapshotTimers.get(window.app?.database);
-    if (timer) clearTimeout(timer);
+    invalidatedKeys.add(key);
+
+    if (gistKey(activeDatabase?.path) === key) {
+        const timer = snapshotTimers.get(activeDatabase);
+        if (timer) clearTimeout(timer);
+        snapshotTimers.delete(activeDatabase);
+    }
+    const write = pendingWrites.get(`${WORKSPACE_STORE}:${key}`);
+    if (write) await write.catch(() => {});
     const snapshot = await readSnapshot(WORKSPACE_STORE, key);
     await removeSnapshot(WORKSPACE_STORE, key);
     if (pinnedRevision(key)) await removeSnapshot(BASE_STORE, key);
-    if (snapshot?.name) {
+    const cacheName = snapshot?.name || activeDatabase?.name;
+    if (cacheName) {
         try {
-            localStorage.removeItem(`${QUERY_PREFIX}${snapshot.name}`);
-            localStorage.removeItem(`${TABS_PREFIX}${snapshot.name}`);
+            localStorage.removeItem(`${QUERY_PREFIX}${cacheName}`);
+            localStorage.removeItem(`${TABS_PREFIX}${cacheName}`);
         } catch (error) { /* Storage may be unavailable. */ }
     }
     window.location.reload();
 }
+
+// Best effort for navigation/reload soon after a mutating SQL statement.
+// IndexedDB writes cannot be guaranteed once a browser kills the page.
+function flushPendingSnapshot() {
+    if (!activeDatabase || !isGistDatabase(activeDatabase) || submissionMode()) return;
+    const timer = snapshotTimers.get(activeDatabase);
+    if (!timer) return;
+    clearTimeout(timer);
+    snapshotTimers.delete(activeDatabase);
+    persistSnapshot(activeDatabase);
+}
+
+window.addEventListener("pagehide", flushPendingSnapshot);
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPendingSnapshot();
+});
 
 customElements.whenDefined("command-bar").then(() => {
     queueMicrotask(() => updateReloadButton());
