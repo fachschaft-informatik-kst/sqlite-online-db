@@ -90,10 +90,13 @@ class SQLite {
         if (updateQuery) {
             this.query = sql;
         }
-        let rows = [];
+        const rows = [];
+        const columns = [];
         this.db.exec({
             sql: sql,
-            rowMode: "object",
+            // Preserve duplicate column names and positional values (e.g. SELECT * joins).
+            rowMode: "array",
+            columnNames: columns,
             resultRows: rows,
         });
         if (!rows.length) {
@@ -103,14 +106,7 @@ class SQLite {
             }
             return null;
         }
-        const result = {
-            columns: Object.getOwnPropertyNames(rows[0]),
-            values: [],
-        };
-        for (let row of rows) {
-            result.values.push(Object.values(row));
-        }
-        return result;
+        return { columns, values: rows };
     }
 
     describeChanges() {
